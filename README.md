@@ -408,9 +408,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 Email: your.email@example.com
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/mcp-server-access/issues)
-- 📖 Documentation: [Wiki](https://github.com/yourusername/mcp-server-access/wiki)
+- 📧 Email: ayamnash@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/ayamnash/MCP_server_ms_access_control/issues)
+
 
 ---
 
