@@ -4,6 +4,8 @@ A powerful Model Context Protocol (MCP) server that provides seamless integratio
 
 
 ##sample prompt
+
+
  Create a Microsoft Access database named point_of_sales1.accdb in this path F:\mcp_server_ms_access_control
 
  for a Point of Sale (POS) system with the following structure:
