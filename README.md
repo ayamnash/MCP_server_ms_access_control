@@ -1,6 +1,8 @@
 # MCP Server ms_Access 🚀
 
 A powerful Model Context Protocol (MCP) server that provides seamless integration with Microsoft Access databases. This server enables you to create, manage, and query Access databases through MCP-compatible applications like Kiro IDE.
+
+
 ##sample prompt
  Create a Microsoft Access database named point_of_sales1.accdb in this path F:\mcp_server_ms_access_control
 
