@@ -176,7 +176,7 @@ pip install uv
 ```bash
 # Clone the repository
 git clone https://github.com/ayamnash/MCP_server_ms_access_control.git
-cd mcp-server-access
+cd MCP_server_ms_access_control
 
 # Create virtual environment and install dependencies
 uv venv
@@ -188,7 +188,7 @@ uv pip install -e .
 ```bash
 # Clone the repository
 git clone https://github.com/ayamnash/MCP_server_ms_access_control.git
-cd mcp-server-access
+cd MCP_server_ms_access_control
 
 # Create virtual environment
 python -m venv .venv
