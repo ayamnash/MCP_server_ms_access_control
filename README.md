@@ -165,7 +165,7 @@ The last part shows whether you have 32-bit or 64-bit Office.
 
 ## Installation
 
-[Watch the video on YouTube](https://youtu.be/AUXL0YR1tpY)
+[Watch the video on YouTube](https://www.youtube.com/watch?v=RWWANlhPjZ4)
 
 
 
