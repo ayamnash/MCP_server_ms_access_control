@@ -165,6 +165,10 @@ The last part shows whether you have 32-bit or 64-bit Office.
 
 ## Installation
 
+[Watch the video on YouTube](https://youtu.be/AUXL0YR1tp)
+
+
+
 ### Option 1: Using uv (Recommended)
 
 First, install uv if you haven't already:
