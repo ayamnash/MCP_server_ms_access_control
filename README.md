@@ -78,6 +78,8 @@ fix Issue may Encountered & Fixed:
 The only issue was with the Items table creation - the initial ItemDescription field size (500 characters) was too large for Access. I fixed this by reducing it to 255 characters, which is the standard maximum for Access text fields.
 
 All queries use parameter prompts [Start Date] and [End Date] so when you run them in Access, you'll be prompted to enter the date range. The database is ready for use!
+
+
 📌 Features
 
 [v1 features vedeo](https://www.youtube.com/watch?v=TplSweAx4XU)
@@ -458,6 +460,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
