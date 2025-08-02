@@ -275,7 +275,7 @@ You can also run the server as a standalone application:
 .venv\Scripts\activate
 
 # Run the server
-python main.py
+python server.py
 ```
 
 ## Available Tools
@@ -298,6 +298,15 @@ The MCP server provides the following tools:
 ### 💾 Query Management
 - **`save_query(db_name: str, query_name: str, sql: str)`** - Save named queries
 - **`list_saved_queries(db_name: str)`** - List all saved queries
+- 📚 list_vba_modules – List all VBA modules in the Access database
+
+📖 read_vba_module – Read the code from a specific VBA module
+
+✍️ write_vba_module – Create or replace a VBA module with provided code
+
+❌ delete_vba_module – Delete a VBA module from the database
+
+🚀 run_vba_function – Execute a VBA function and return the result
 
 ## Usage Examples
 
@@ -444,5 +453,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
