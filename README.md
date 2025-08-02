@@ -80,6 +80,10 @@ The only issue was with the Items table creation - the initial ItemDescription f
 All queries use parameter prompts [Start Date] and [End Date] so when you run them in Access, you'll be prompted to enter the date range. The database is ready for use!
 📌 Features
 
+[v1 features vedeo](https://www.youtube.com/watch?v=TplSweAx4XU)
+
+[v2 features vedeo](https://www.youtube.com/watch?v=RWWANlhPjZ4)
+
 🗃️ Database Structure Tools
 🏗️ create_database – Create an empty Access .accdb database
 
@@ -187,6 +191,7 @@ The last part shows whether you have 32-bit or 64-bit Office.
 ## Installation
 
 [Watch the video on YouTube](https://www.youtube.com/watch?v=RWWANlhPjZ4)
+
 
 
 
@@ -453,6 +458,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
