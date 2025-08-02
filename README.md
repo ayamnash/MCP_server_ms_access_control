@@ -78,14 +78,35 @@ fix Issue may Encountered & Fixed:
 The only issue was with the Items table creation - the initial ItemDescription field size (500 characters) was too large for Access. I fixed this by reducing it to 255 characters, which is the standard maximum for Access text fields.
 
 All queries use parameter prompts [Start Date] and [End Date] so when you run them in Access, you'll be prompted to enter the date range. The database is ready for use!
-## Features
+📌 Features
 
-- ✅ Create new Access databases (.accdb)
-- 🏗️ Create and manage database tables
-- 📊 Insert, update, and query data
-- 💾 Save and manage named queries
-- 📋 List tables and saved queries
-- 🔍 Execute complex SQL operations
+🗃️ Database Structure Tools
+🏗️ create_database – Create an empty Access .accdb database
+
+🧱 create_table – Create a table with specified schema
+
+📋 list_tables – List all tables in the database
+
+📊 Data Management Tools
+➕ insert_data – Insert rows into a table
+
+🧮 run_query – Execute SQL queries (SELECT, UPDATE, DELETE, etc.)
+
+🔎 Query Management Tools
+💾 save_query – Save a named query inside the Access database
+
+📄 list_saved_queries – List all saved queries in the database
+
+📜 VBA Module Tools (NEW!)
+📚 list_vba_modules – List all VBA modules in the Access database
+
+📖 read_vba_module – Read the code from a specific VBA module
+
+✍️ write_vba_module – Create or replace a VBA module with provided code
+
+❌ delete_vba_module – Delete a VBA module from the database
+
+🚀 run_vba_function – Execute a VBA function and return the result
 
 ## Prerequisites
 
@@ -423,4 +444,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
