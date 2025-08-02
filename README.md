@@ -227,7 +227,7 @@ LIKE AS
         "f:\\mcp_server_ms_access_control\\server.py"
       ],
       "env": {
-        "PYTHONPATH": "f:\\mcp_server_ms_access"
+        "PYTHONPATH": "f:\\mcp_server_ms_access_control"
       },
       "disabled": false,
       "autoApprove": [
@@ -423,3 +423,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
