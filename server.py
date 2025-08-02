@@ -175,6 +175,164 @@ def list_saved_queries(db_name: str) -> str:
     except Exception as e:
         return f"❌ Error listing saved queries: {str(e)}"
 
+@mcp.tool
+def list_vba_modules(db_name: str) -> str:
+    """List all VBA modules in the Access database"""
+    try:
+        path = get_db_path(db_name)
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        # Access the VBA project
+        project = access.VBE.VBProjects(1)
+        
+        modules = []
+        for i in range(1, project.VBComponents.Count + 1):
+            component = project.VBComponents(i)
+            module_type = {
+                1: "Standard Module",
+                2: "Class Module", 
+                3: "Form Module",
+                100: "Document Module"
+            }.get(component.Type, f"Type {component.Type}")
+            
+            modules.append(f"- {component.Name} ({module_type})")
+        
+        access.Quit()
+        
+        if modules:
+            return "VBA Modules:\n" + "\n".join(modules)
+        else:
+            return "No VBA modules found"
+            
+    except Exception as e:
+        return f"❌ Error listing VBA modules: {str(e)}"
+
+@mcp.tool
+def read_vba_module(db_name: str, module_name: str) -> str:
+    """Read the code from a specific VBA module"""
+    try:
+        path = get_db_path(db_name)
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        # Access the VBA project
+        project = access.VBE.VBProjects(1)
+        
+        # Find the specific module
+        module_found = False
+        for i in range(1, project.VBComponents.Count + 1):
+            component = project.VBComponents(i)
+            if component.Name.lower() == module_name.lower():
+                code = component.CodeModule.Lines(1, component.CodeModule.CountOfLines)
+                module_found = True
+                break
+        
+        access.Quit()
+        
+        if module_found:
+            return f"VBA Code from module '{module_name}':\n\n{code}"
+        else:
+            return f"❌ Module '{module_name}' not found"
+            
+    except Exception as e:
+        return f"❌ Error reading VBA module: {str(e)}"
+
+@mcp.tool
+def write_vba_module(db_name: str, module_name: str, code: str) -> str:
+    """Create or replace a VBA module with the provided code"""
+    try:
+        path = get_db_path(db_name)
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        # Access the VBA project
+        project = access.VBE.VBProjects(1)
+        
+        # Check if module already exists
+        module_exists = False
+        for i in range(1, project.VBComponents.Count + 1):
+            component = project.VBComponents(i)
+            if component.Name.lower() == module_name.lower():
+                # Clear existing code
+                component.CodeModule.DeleteLines(1, component.CodeModule.CountOfLines)
+                # Add new code
+                component.CodeModule.AddFromString(code)
+                module_exists = True
+                break
+        
+        if not module_exists:
+            # Create new standard module
+            new_module = project.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
+            new_module.Name = module_name
+            new_module.CodeModule.AddFromString(code)
+        
+        access.Quit()
+        
+        action = "updated" if module_exists else "created"
+        return f"✅ VBA module '{module_name}' {action} successfully"
+        
+    except Exception as e:
+        return f"❌ Error writing VBA module: {str(e)}"
+
+@mcp.tool
+def delete_vba_module(db_name: str, module_name: str) -> str:
+    """Delete a VBA module from the Access database"""
+    try:
+        path = get_db_path(db_name)
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        # Access the VBA project
+        project = access.VBE.VBProjects(1)
+        
+        # Find and delete the module
+        module_found = False
+        for i in range(1, project.VBComponents.Count + 1):
+            component = project.VBComponents(i)
+            if component.Name.lower() == module_name.lower():
+                project.VBComponents.Remove(component)
+                module_found = True
+                break
+        
+        access.Quit()
+        
+        if module_found:
+            return f"✅ VBA module '{module_name}' deleted successfully"
+        else:
+            return f"❌ Module '{module_name}' not found"
+            
+    except Exception as e:
+        return f"❌ Error deleting VBA module: {str(e)}"
+
+@mcp.tool
+def run_vba_function(db_name: str, function_name: str, args: str = "") -> str:
+    """Execute a VBA function in the Access database and return the result. 
+    Args should be comma-separated values like: 'arg1,arg2,arg3'"""
+    try:
+        path = get_db_path(db_name)
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        # Parse arguments if provided
+        if args.strip():
+            arg_list = [arg.strip() for arg in args.split(',')]
+            result = access.Run(function_name, *arg_list)
+        else:
+            result = access.Run(function_name)
+        
+        access.Quit()
+        
+        return f"✅ Function '{function_name}' executed successfully. Result: {result}"
+        
+    except Exception as e:
+        return f"❌ Error running VBA function: {str(e)}"
+
 
 if __name__ == "__main__":
     mcp.run()
