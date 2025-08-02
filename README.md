@@ -84,7 +84,7 @@ All queries use parameter prompts [Start Date] and [End Date] so when you run th
 
 [v1 features vedeo](https://www.youtube.com/watch?v=TplSweAx4XU)
 
-[v2 features vedeo](https://www.youtube.com/watch?v=RWWANlhPjZ4)
+[v2 features vedeo](https://www.youtube.com/watch?v=vtuiIgX98t4)
 
 🗃️ Database Structure Tools
 🏗️ create_database – Create an empty Access .accdb database
@@ -460,6 +460,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
