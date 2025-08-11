@@ -80,6 +80,7 @@ All queries use parameter prompts [Start Date] and [End Date] so when you run th
 
 
 ============================================
+
 (2)using mcp server  to
 Create a complete Laundry Management application in Microsoft Access name laundry_managemet1.accdb in this folder path 
 F:\mcp_server_ms_access_control1.
@@ -634,6 +635,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
