@@ -3,10 +3,10 @@
 A powerful Model Context Protocol (MCP) server that provides seamless integration with Microsoft Access databases. This server enables you to create, manage, and query Access databases through MCP-compatible applications like Kiro IDE.
 
 
-##prompt sample
+##prompt sampleS
 
 
- Create a Microsoft Access database named pos.accdb in this path F:\mcp_server_ms_access_control
+ (1)Create a Microsoft Access database named pos.accdb in this path F:\mcp_server_ms_access_control
 
  for a Point of Sale (POS) system with the following structure:
 
@@ -78,13 +78,201 @@ fix Issue may Encountered & Fixed:
 The only issue was with the Items table creation - the initial ItemDescription field size (500 characters) was too large for Access. I fixed this by reducing it to 255 characters, which is the standard maximum for Access text fields.
 
 All queries use parameter prompts [Start Date] and [End Date] so when you run them in Access, you'll be prompted to enter the date range. The database is ready for use!
+============================================
+(2)Create a Microsoft Access database named pos.accdb in this path F:\mcp_server_ms_access_control1
 
+for a Point of Sale (POS1) system with the following structure:
+
+Database Name pos.accdb
+
+ Items Table:
+
+ItemID: unique ID (AutoNumber)
+
+ItemName: name of the item
+
+ItemPrice: price per unit
+
+ItemDescription: optional text
+
+ Transactions Table:
+
+TransactionID: unique ID (AutoNumber)
+
+ItemID: link to the Items table
+
+TransactionType: either "Purchase" or "Sales"
+
+Quantity: number of items
+
+TransactionDate: date of transaction
+
+Expenses Table:
+
+ExpenseID: unique ID (AutoNumber)
+
+ExpenseType: type/category of expense
+
+Amount: how much was spent
+
+ExpenseDate: date of expense
+insert data for all table to test 
+
+Create and save four queries:
+
+Sales Amount Between Two Dates
+Calculate the total sales (item price × quantity) filtered by a start and end date.
+
+Purchase Amount Between Two Dates
+Calculate total purchases (item price × quantity) between two dates.
+
+Sum of Items Sold Between Two Dates
+Group by item name and calculate how many of each item was sold between two dates.
+
+4 detail expense between two dates
+
+Save the queries as:
+
+qry_SalesAmount_BetweenDates
+
+qry_PurchaseAmount_BetweenDates
+
+qry_SumSoldItems_BetweenDates
+
+qry_expense_details
+
+fix Issue may Encountered & Fixed: The only issue was with the Items table creation - the initial ItemDescription field size (500 characters) was too large for Access. I fixed this by reducing it to 255 characters, which is the standard maximum for Access text fields.
+
+All queries use parameter prompts [Start Date] and [End Date] so when you run them in Access, you'll be prompted to enter the date range. The database is ready for use!
+
+
+
+Create a Microsoft Access database named pos.accdb in this path F:\mcp_server_ms_access_control
+
+for a Point of Sale (POS) system with the following structure:
+
+Database Name pos.accdb
+
+ Items Table:
+
+ItemID: unique ID (AutoNumber)
+
+ItemName: name of the item
+
+ItemPrice: price per unit
+
+ItemDescription: optional text
+
+ Transactions Table:
+
+TransactionID: unique ID (AutoNumber)
+
+ItemID: link to the Items table
+
+TransactionType: either "Purchase" or "Sales"
+
+Quantity: number of items
+
+TransactionDate: date of transaction
+
+ Expenses Table:
+
+ExpenseID: unique ID (AutoNumber)
+
+ExpenseType: type/category of expense
+
+Amount: how much was spent
+
+ExpenseDate: date of expense
+
+Create and save four queries:
+
+Sales Amount Between Two Dates
+Calculate the total sales (item price × quantity) filtered by a start and end date.
+
+Purchase Amount Between Two Dates
+Calculate total purchases (item price × quantity) between two dates.
+
+Sum of Items Sold Between Two Dates
+Group by item name and calculate how many of each item was sold between two dates.
+
+4 detail expense between two dates
+
+Save the queries as:
+
+qry_SalesAmount_BetweenDates
+
+qry_PurchaseAmount_BetweenDates
+
+qry_SumSoldItems_BetweenDates
+
+qry_expense_details
+create :-
+single form named exp_form Expenses table
+create sub form named trans_sub from transactions table and main form named main_form from items table and ebedded with trans_sub from
+
+
+fix Issue may Encountered & Fixed: The only issue was with the Items table creation - the initial ItemDescription field size (500 characters) was too large for Access. I fixed this by reducing it to 255 characters, which is the standard maximum for Access text fields.
+
+All queries use parameter prompts [Start Date] and [End Date] so when you run them in Access, you'll be prompted to enter the date range. The database is ready for use!
+==========================================================
+(3)using mcp server  to
+Create a complete Laundry Management application in Microsoft Access name laundry_managemet1.accdb in this folder path 
+F:\mcp_server_ms_access_control1.
+
+Requirements:
+
+Database Structure
+
+Create all necessary tables with proper field names, data types, and primary/foreign keys.
+
+Include at least these entities:
+tables:-
+
+Customers (CustomerID, Name, Phone, Address, etc.)
+
+LaundryItems (ItemID, Description, PricePerUnit, etc.)
+
+Orders (OrderID, CustomerID, OrderDate, DueDate, Status, etc.)
+
+OrderDetails (OrderDetailID, OrderID, ItemID, Quantity, Subtotal, etc.)
+
+Payments (PaymentID, OrderID, PaymentDate, Amount, PaymentMethod, etc.)
+
+Queries:-
+
+Create queries for:
+
+Orders due today
+
+Total sales per day/month
+
+Unpaid orders
+
+Customer order history
+
+Forms:-
+
+Customer management form (add, edit, delete).
+
+Order entry form with subform for order details.
+
+Payment entry form.
+
+Order tracking form (view status, mark as completed).
 
 📌 Features
 
 [v1 features vedeo](https://www.youtube.com/watch?v=TplSweAx4XU)
 
 [v2 features vedeo](https://www.youtube.com/watch?v=vtuiIgX98t4)
+
+[v3 features vedeo](https://www.youtube.com/watch?v=2-KPeqXjBLw)
+🎨 Form Creation Tools (v3 - NEW!)
+📝 generate_form_template – Generate a text template for Access forms
+
+🏗️ create_form_from_llm_text – Create Access forms from text definitions
+
 
 🗃️ Database Structure Tools
 🏗️ create_database – Create an empty Access .accdb database
@@ -103,7 +291,7 @@ All queries use parameter prompts [Start Date] and [End Date] so when you run th
 
 📄 list_saved_queries – List all saved queries in the database
 
-📜 VBA Module Tools (NEW!)
+📜 VBA Module Tools (v2)
 📚 list_vba_modules – List all VBA modules in the Access database
 
 📖 read_vba_module – Read the code from a specific VBA module
@@ -113,6 +301,18 @@ All queries use parameter prompts [Start Date] and [End Date] so when you run th
 ❌ delete_vba_module – Delete a VBA module from the database
 
 🚀 run_vba_function – Execute a VBA function and return the result
+
+
+✨ **Form Types Supported:**
+- **Single Forms** – Standalone forms for data entry and viewing
+- **Subforms** – Forms designed to be embedded in other forms (datasheet view)
+- **Main Forms with Subforms** – Master-detail forms with embedded subforms and automatic linking
+
+🔧 **Enhanced Tools (v3 Improvements):**
+- **Improved Error Handling** – Better error messages and feedback for all operations
+- **Enhanced Query Management** – Fixed parameter handling in saved queries
+- **Optimized Form Generation** – Automatic GUID and NameMap generation for robust form creation
+- **Better Field Validation** – Improved data type handling and field size validation
 
 ## Prerequisites
 
@@ -259,13 +459,19 @@ LIKE AS
       },
       "disabled": false,
       "autoApprove": [
-        "mcp_access_database_create_database",
-        "mcp_access_database_create_table",
-        "mcp_access_database_insert_data",
-        "mcp_access_database_run_query",
-        "mcp_access_database_list_tables",
-        "mcp_access_database_save_query",
-        "mcp_access_database_list_saved_queries"
+        "mcp_ms_access_database1_create_database",
+        "mcp_ms_access_database1_create_table",
+        "mcp_ms_access_database1_insert_data",
+        "mcp_ms_access_database1_run_query",
+        "mcp_ms_access_database1_list_tables",
+        "mcp_ms_access_database1_save_query",
+        "mcp_ms_access_database1_list_vba_modules",
+        "mcp_ms_access_database1_read_vba_module",
+        "mcp_ms_access_database1_write_vba_module",
+        "mcp_ms_access_database1_delete_vba_module",
+        "mcp_ms_access_database1_run_vba_function",
+        "mcp_ms_access_database1_generate_form_template",
+        "mcp_ms_access_database1_create_form_from_llm_text"
       ]
     }
   }
@@ -305,15 +511,24 @@ The MCP server provides the following tools:
 ### 💾 Query Management
 - **`save_query(db_name: str, query_name: str, sql: str)`** - Save named queries
 - **`list_saved_queries(db_name: str)`** - List all saved queries
-- 📚 list_vba_modules – List all VBA modules in the Access database
 
-📖 read_vba_module – Read the code from a specific VBA module
+### 📜 VBA Module Management (v2)
+- **`list_vba_modules(db_name: str)`** - List all VBA modules in the Access database
+- **`read_vba_module(db_name: str, module_name: str)`** - Read the code from a specific VBA module
+- **`write_vba_module(db_name: str, module_name: str, code: str)`** - Create or replace a VBA module with provided code
+- **`delete_vba_module(db_name: str, module_name: str)`** - Delete a VBA module from the database
+- **`run_vba_function(db_name: str, function_name: str, args: str)`** - Execute a VBA function and return the result
 
-✍️ write_vba_module – Create or replace a VBA module with provided code
-
-❌ delete_vba_module – Delete a VBA module from the database
-
-🚀 run_vba_function – Execute a VBA function and return the result
+### 🎨 Form Creation Tools (v3 - NEW!)
+- **`generate_form_template(db_name: str, record_source: str, form_type: str, ...)`** - Generate a text template for Access forms
+  - **form_type options:**
+    - `"single"` - Standard standalone form
+    - `"subform"` - Form designed for embedding (datasheet view)
+    - `"main"` - Form that contains a subform with automatic linking
+- **`create_form_from_llm_text(db_name: str, form_name: str, form_text: str)`** - Create Access forms from text definitions
+  - Automatically generates GUIDs and NameMaps
+  - Handles form validation and error correction
+  - Supports complex form layouts with subforms
 
 ## Usage Examples
 
@@ -344,6 +559,53 @@ run_query("my_library", "SELECT * FROM books WHERE Year > 2022")
 
 # Save a frequently used query
 save_query("my_library", "recent_books", "SELECT * FROM books WHERE Year > 2020")
+```
+
+### Creating Forms (v3 - NEW!)
+
+```python
+# Create a single form for data entry
+generate_form_template("my_library", "books", "single")
+create_form_from_llm_text("my_library", "books_form", form_template_text)
+
+# Create a subform for embedding
+generate_form_template("my_library", "authors", "subform")
+create_form_from_llm_text("my_library", "authors_subform", subform_template_text)
+
+# Create a main form with embedded subform
+generate_form_template(
+    "my_library", 
+    "books", 
+    "main",
+    subform_object_name="Form.authors_subform",
+    link_master_field="AuthorID",
+    link_child_field="AuthorID"
+)
+create_form_from_llm_text("my_library", "books_with_authors", main_form_template_text)
+```
+
+### VBA Integration (v2)
+
+```python
+# List all VBA modules
+list_vba_modules("my_library")
+
+# Create a VBA function
+vba_code = """
+Public Function CalculateLateFee(DaysLate As Integer) As Currency
+    If DaysLate <= 0 Then
+        CalculateLateFee = 0
+    ElseIf DaysLate <= 7 Then
+        CalculateLateFee = 1.00
+    Else
+        CalculateLateFee = 1.00 + (DaysLate - 7) * 0.50
+    End If
+End Function
+"""
+write_vba_module("my_library", "LibraryFunctions", vba_code)
+
+# Execute the VBA function
+result = run_vba_function("my_library", "CalculateLateFee", "10")
 ```
 import win32com.client
 adox = win32com.client.Dispatch("ADOX.Catalog")
