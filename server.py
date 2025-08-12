@@ -276,69 +276,6 @@ def save_query(db_name: str, query_name: str, sql: str) -> str:
 
 
 
-# @mcp.tool
-# def save_query(db_name: str, query_name: str, sql: str) -> str:
-#     """Saves a named query (a 'View') inside the Access database."""
-#     try:
-#         path = get_db_path(db_name)
-#         access = win32com.client.Dispatch("Access.Application")
-#         access.Visible = False
-#         access.OpenCurrentDatabase(path)
-#         dao = access.CurrentDb()
-#         try:
-#             dao.QueryDefs.Delete(query_name)
-#         except Exception:
-#             pass
-#         dao.CreateQueryDef(query_name, sql)
-#         access.CloseCurrentDatabase()
-#         access.Quit()
-#         return f"Saved query '{query_name}' in {db_name}"
-#     except Exception as e:
-#         return f"Error saving query: {str(e)}"
-# Replace your old save_query function with this new one
-
-# @mcp.tool
-# def save_query(db_name: str, query_name: str, sql: str) -> str:
-#     """
-#     Saves a named query (a 'View') inside the Access database using the direct ADOX method.
-#     This is more reliable than automating the full Access application.
-#     """
-#     path = get_db_path(db_name)
-#     conn = None
-    
-#     try:
-#         # 1. Create a direct connection to the database engine
-#         conn = win32com.client.Dispatch("ADODB.Connection")
-#         conn_str = f"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={path};"
-#         conn.Open(conn_str)
-
-#         # 2. Create a Catalog object to manage database schema
-#         cat = win32com.client.Dispatch("ADOX.Catalog")
-#         cat.ActiveConnection = conn
-
-#         # 3. If the query already exists, delete it first.
-#         # This prevents an error if you try to save over an existing query.
-#         try:
-#             cat.Views.Delete(query_name)
-#         except Exception:
-#             pass  # Ignore if the query doesn't exist
-
-#         # 4. Create the new query (View) using a Command object
-#         cmd = win32com.client.Dispatch("ADODB.Command")
-#         cmd.CommandText = sql
-        
-#         # 5. Append the command as a new View to the catalog
-#         cat.Views.Append(query_name, cmd)
-
-#         return f"Saved query '{query_name}' in {db_name}"
-
-#     except Exception as e:
-#         return f"Error saving query: {str(e)}"
-        
-#     finally:
-#         # 6. Clean up the connection
-#         if conn and conn.State == 1: # 1 means the connection is open
-#             conn.Close()
 
 
 @mcp.tool
@@ -756,4 +693,5 @@ def run_vba_function(db_name: str, function_name: str, args: str = "") -> str:
             
 if __name__ == "__main__":
     mcp.run()
+
 
