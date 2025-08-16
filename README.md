@@ -391,7 +391,21 @@ LIKE AS
 }
 
 ```
-
+Visual studio code 
+.vscode\mcp.json
+```json
+{
+  "servers": {
+    "ms_access-database1": {
+      "command": "python",
+      "args": ["f:\\mcp_server_ms_access_control1\\server.py"],
+      "env": {
+        "PYTHONPATH": "f:\\mcp_server_ms_access_control1"
+      }
+    }
+  }
+} 
+```
 ### Desktop Application Usage
 
 You can also run the server as a standalone application:
@@ -635,6 +649,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
