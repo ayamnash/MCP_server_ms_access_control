@@ -2,6 +2,162 @@
 
 A powerful Model Context Protocol (MCP) server that provides seamless integration with Microsoft Access databases. This server enables you to create, manage, and query Access databases through MCP-compatible applications like Kiro IDE.
 
+## Prerequisites
+
+- **Windows Operating System** (required for Access integration)
+- **Python 3.13+**
+- **Microsoft Access Database Engine** It is recommended to use the 2016 version.(required - see installation guide below)
+- **uv** package manager (recommended)
+
+### ⚠️ Important: Bit Architecture Compatibility
+
+**Python , Microsoft Access,Microsoft Access Database Engine must have the same bit architecture (32-bit or 64-bit).**
+Microsoft Access Database Engine 2016 Redistributable
+
+Choose:
+
+AccessDatabaseEngine.exe → for 32-bit systems or 32-bit Office
+
+AccessDatabaseEngine_X64.exe → for 64-bit Office
+
+🧪 Summary:
+Feature	                     2010 Engine	         2016 Engine
+Compatibility	           Office 2010–2013	       Office 2010–2021
+New Excel/Access support	 ❌ Limited	                ✅ Full
+Future-proof	             ❌ No	                    ✅ Yes
+Stability	                 ✅ Yes                   	✅ Yes
+Bitness must match Office	 ✅ Yes	                    ✅ Yes
+
+#### Check Your Python Architecture
+
+Open your terminal (CMD or PowerShell) and run:
+
+```bash
+python -c "import platform; print(platform.architecture())"
+```
+
+This will show either:
+- `('64bit', 'WindowsPE')` - You have 64-bit Python
+- `('32bit', 'WindowsPE')` - You have 32-bit Python
+
+#### Check Your Office/Excel Architecture
+
+1. Open **Excel**
+2. Click **File** tab
+3. Choose **Account**
+4. Click **About Excel**
+
+You'll see something like:
+```
+Microsoft® Excel® 2016 MSO (Version 2506 Build 16.0.18925.20076) 32-bit
+```
+or
+```
+Microsoft® Excel® 2019 MSO (Version 2506 Build 16.0.18925.20076) 64-bit
+```
+
+The last part shows whether you have 32-bit or 64-bit Office.
+
+### Installing Microsoft Access Database Engine
+
+**You must install the Access Database Engine that matches your Python architecture:**
+
+#### For 64-bit Python:
+- Download: [Microsoft Access Database Engine 2016 Redistributable (64-bit)](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
+- File: `AccessDatabaseEngine_X64.exe`
+
+#### For 32-bit Python:
+- Download: [Microsoft Access Database Engine 2016 Redistributable (32-bit)](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
+- File: `AccessDatabaseEngine.exe`
+
+#### Installation Notes:
+We will run the server inside a virtual environment.
+
+### Option 1: Using uv (Recommended)
+
+First, install uv if you haven't already:
+
+```bash
+# Install uv using pip
+pip install uv
+
+```bash
+# Clone the repository
+git clone https://github.com/ayamnash/MCP_server_ms_access_control.git
+cd MCP_server_ms_access_control
+
+# Create virtual environment and install dependencies
+uv venv
+uv pip install -e .
+```
+
+### Option 2: Using pip
+
+```bash
+# Clone the repository
+git clone https://github.com/ayamnash/MCP_server_ms_access_control.git
+cd MCP_server_ms_access_control
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# On Windows:
+.venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+```
+
+
+## Configuration
+
+### Kiro IDE Configuration claude desktop
+
+To use this MCP server with Kiro IDE, add the following configuration to your MCP settings:
+
+#### Workspace Configuration (`.kiro/settings/mcp.json`)
+LIKE AS 
+```json
+{
+  "mcpServers": {
+    "msaccess": {
+      "command": "F:\\mcp_server_ms_access_control1\\.venv\\Scripts\\python.exe",
+      "args": [
+        "F:\\mcp_server_ms_access_control1\\server.py"
+      ]
+    }
+  }
+}
+
+```
+Visual studio code 
+.vscode\mcp.json
+```json
+{
+  "servers": {
+    "msaccess": {
+      "command": "F:\\mcp_server_ms_access_control1\\.venv\\Scripts\\python.exe",
+      "args": [
+        "F:\\mcp_server_ms_access_control1\\server.py"
+      ]
+    }
+  }
+}
+```
+### Desktop Application Usage
+
+You can also run the server as a standalone application:
+
+```bash
+# Activate your virtual environment first
+.venv\Scripts\activate
+
+# Run the server
+python server.py
+```
+
+
 # **Prompt Samples**
 
 
@@ -81,6 +237,8 @@ All queries use parameter prompts [Start Date] and [End Date] so when you run th
 
 ============================================
 
+
+
 (2)using mcp server  to
 Create a complete Laundry Management application in Microsoft Access name laundry_managemet1.accdb in this folder path 
 F:\mcp_server_ms_access_control1.
@@ -103,14 +261,14 @@ Orders (OrderID, CustomerID, OrderDate, DueDate, Status, etc.)
 OrderDetails (OrderDetailID, OrderID, ItemID, Quantity, Subtotal, etc.)
 
 Payments (PaymentID, OrderID, PaymentDate, Amount, PaymentMethod, etc.)
-
+after create tables insert data for all table to testing 
 Queries:-
 
 Create queries for:
 
-Orders due today
+Orders due today 
 
-Total sales per day/month
+Total sales per day/month named sales_dm
 
 Unpaid orders
 
@@ -124,55 +282,68 @@ Order entry form with subform for order details.
 
 Payment entry form.
 
-Order tracking form (view status, mark as completed).
+Reports:-
+creat report named customer_report from Customers tables
+creat report named sales_dm from sales_dm query
+
+============================================
 
 
-==========================================================================
 
 (3)using mcp server  to
-Create a complete Laundry Management application in Microsoft Access name laundry_managemet1.accdb in this folder path 
-F:\mcp_server_ms_access_control1.
+Create a complete Microsoft Access database for managing a school named School_Management.accdb in this folder path F:\mcp_server_ms_access_control1 . 
+The database should include all necessary tables, queries, forms, and reports, each with clear and consistent naming. The system should support student enrollment, teacher assignments, class schedules, grades, attendance, and fee tracking.
 
-Requirements:
+📁 Tables:
+Students_Table: StudentID, FirstName, LastName, DOB, Gender, Address, Phone, Email, EnrollmentDate, ClassID
 
-Database Structure
+Teachers_Table: TeacherID, FirstName, LastName, SubjectSpecialization, Phone, Email, HireDate
 
-Create all necessary tables with proper field names, data types, and primary/foreign keys.
+Classes_Table: ClassID, ClassName, GradeLevel, TeacherID, RoomNumber
 
-Include at least these entities:
-tables:-
+Subjects_Table: SubjectID, SubjectName, ClassID, TeacherID
 
-Customers (CustomerID, Name, Phone, Address, etc.)
+Grades_Table: GradeID, StudentID, SubjectID, Grade, Term, Year
 
-LaundryItems (ItemID, Description, PricePerUnit, etc.)
+Attendance_Table: AttendanceID, StudentID, Date, Status (Present/Absent/Late), Remarks
 
-Orders (OrderID, CustomerID, OrderDate, DueDate, Status, etc.)
+Fees_Table: FeeID, StudentID, AmountDue, AmountPaid, DueDate, PaymentDate, Status
 
-OrderDetails (OrderDetailID, OrderID, ItemID, Quantity, Subtotal, etc.)
+🔍 Queries:
+Outstanding_Fees_Query: List of students with unpaid fees
 
-Payments (PaymentID, OrderID, PaymentDate, Amount, PaymentMethod, etc.)
+Attendance_Summary_Query: Attendance summary per student
 
-Queries:-
+Grade_Average_Query: Average grades per class and subject
 
-Create queries for:
+Teacher_Assignment_Query: Teachers assigned to each class
 
-Orders due today
+🧾 Forms:
+Student_Registration_Form: For entering and updating student details
 
-Total sales per day/month
+Teacher_Profile_Form: For entering teacher information
 
-Unpaid orders
+Class_Scheduling_Form: For managing class details and assignments
 
-Customer order history
+Grade_Entry_Form: For recording student grades
 
-Forms:-
+Attendance_Tracking_Form: For marking and reviewing attendance
 
-Customer management form (add, edit, delete).
+Fee_Payment_Form: For recording fee payments
 
-Order entry form with subform for order details.
+📊 Reports:
+Student_Report_Card: Displays student grades and performance
 
-Payment entry form.
+Monthly_Attendance_Report: Attendance overview by month
 
-Order tracking form (view status, mark as completed).
+Fee_Collection_Report: Summary of fee payments and dues
+
+Class_Schedule_Report: Overview of class schedules
+
+Teacher_Workload_Report: Summary of teacher assignments and subjects
+
+Ensure relational integrity using primary and foreign keys. Use combo boxes, subforms, and validation rules for usability. Design the interface to be intuitive for school administrators.
+
 
 📌 Features
 
@@ -181,6 +352,8 @@ Order tracking form (view status, mark as completed).
 [v2 features vedeo](https://www.youtube.com/watch?v=vtuiIgX98t4)
 
 [v3 features vedeo](https://www.youtube.com/watch?v=2-KPeqXjBLw)
+[v3.1 features vedeo](https://www.youtube.com/watch?v=2-KPeqXjBLw)
+
 🎨 Form Creation Tools (v3 - NEW!)
 📝 generate_form_template – Generate a text template for Access forms
 
@@ -227,196 +400,7 @@ Order tracking form (view status, mark as completed).
 - **Optimized Form Generation** – Automatic GUID and NameMap generation for robust form creation
 - **Better Field Validation** – Improved data type handling and field size validation
 
-## Prerequisites
 
-- **Windows Operating System** (required for Access integration)
-- **Python 3.13+**
-- **Microsoft Access Database Engine** It is recommended to use the 2016 version.(required - see installation guide below)
-- **uv** package manager (recommended)
-
-### ⚠️ Important: Bit Architecture Compatibility
-
-**Python and Microsoft Access Database Engine must have the same bit architecture (32-bit or 64-bit).**
-Microsoft Access Database Engine 2016 Redistributable
-
-Choose:
-
-AccessDatabaseEngine.exe → for 32-bit systems or 32-bit Office
-
-AccessDatabaseEngine_X64.exe → for 64-bit Office
-
-🧪 Summary:
-Feature	                     2010 Engine	         2016 Engine
-Compatibility	           Office 2010–2013	       Office 2010–2021
-New Excel/Access support	 ❌ Limited	                ✅ Full
-Future-proof	             ❌ No	                    ✅ Yes
-Stability	                 ✅ Yes                   	✅ Yes
-Bitness must match Office	 ✅ Yes	                    ✅ Yes
-
-#### Check Your Python Architecture
-
-Open your terminal (CMD or PowerShell) and run:
-
-```bash
-python -c "import platform; print(platform.architecture())"
-```
-
-This will show either:
-- `('64bit', 'WindowsPE')` - You have 64-bit Python
-- `('32bit', 'WindowsPE')` - You have 32-bit Python
-
-#### Check Your Office/Excel Architecture
-
-1. Open **Excel**
-2. Click **File** tab
-3. Choose **Account**
-4. Click **About Excel**
-
-You'll see something like:
-```
-Microsoft® Excel® 2016 MSO (Version 2506 Build 16.0.18925.20076) 32-bit
-```
-or
-```
-Microsoft® Excel® 2019 MSO (Version 2506 Build 16.0.18925.20076) 64-bit
-```
-
-The last part shows whether you have 32-bit or 64-bit Office.
-
-### Installing Microsoft Access Database Engine
-
-**You must install the Access Database Engine that matches your Python architecture:**
-
-#### For 64-bit Python:
-- Download: [Microsoft Access Database Engine 2016 Redistributable (64-bit)](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
-- File: `AccessDatabaseEngine_X64.exe`
-
-#### For 32-bit Python:
-- Download: [Microsoft Access Database Engine 2016 Redistributable (32-bit)](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
-- File: `AccessDatabaseEngine.exe`
-
-#### Installation Notes:
-- If you have Office 2016/2019 installed, you may need to use the `/quiet` parameter:
-  ```bash
-  AccessDatabaseEngine_X64.exe /quiet
-  ```
-- For Office 2016/2019 users: The database engine version should match your Office version
-- You may need to run the installer as Administrator
-
-## Installation
-
-[Watch the video on YouTube](https://www.youtube.com/watch?v=RWWANlhPjZ4)
-
-
-
-
-### Option 1: Using uv (Recommended)
-
-First, install uv if you haven't already:
-
-```bash
-# Install uv using pip
-pip install uv
-
-
-
-
-
-```bash
-# Clone the repository
-git clone https://github.com/ayamnash/MCP_server_ms_access_control.git
-cd MCP_server_ms_access_control
-
-# Create virtual environment and install dependencies
-uv venv
-uv pip install -e .
-```
-
-### Option 2: Using pip
-
-```bash
-# Clone the repository
-git clone https://github.com/ayamnash/MCP_server_ms_access_control.git
-cd MCP_server_ms_access_control
-
-# Create virtual environment
-python -m venv .venv
-
-# Activate virtual environment
-# On Windows:
-.venv\Scripts\activate
-
-# Install dependencies
-pip install -e .
-```
-
-
-## Configuration
-
-### Kiro IDE Configuration
-
-To use this MCP server with Kiro IDE, add the following configuration to your MCP settings:
-
-#### Workspace Configuration (`.kiro/settings/mcp.json`)
-LIKE AS 
-```json
-{
-  "mcpServers": {
-    "ms_access-database": {
-      "command": "python",
-      "args": [
-        "f:\\mcp_server_ms_access_control\\server.py"
-      ],
-      "env": {
-        "PYTHONPATH": "f:\\mcp_server_ms_access_control"
-      },
-      "disabled": false,
-      "autoApprove": [
-        "mcp_ms_access_database1_create_database",
-        "mcp_ms_access_database1_create_table",
-        "mcp_ms_access_database1_insert_data",
-        "mcp_ms_access_database1_run_query",
-        "mcp_ms_access_database1_list_tables",
-        "mcp_ms_access_database1_save_query",
-        "mcp_ms_access_database1_list_vba_modules",
-        "mcp_ms_access_database1_read_vba_module",
-        "mcp_ms_access_database1_write_vba_module",
-        "mcp_ms_access_database1_delete_vba_module",
-        "mcp_ms_access_database1_run_vba_function",
-        "mcp_ms_access_database1_generate_form_template",
-        "mcp_ms_access_database1_create_form_from_llm_text"
-      ]
-    }
-  }
-}
-
-```
-Visual studio code 
-.vscode\mcp.json
-```json
-{
-  "servers": {
-    "ms_access-database1": {
-      "command": "python",
-      "args": ["f:\\mcp_server_ms_access_control1\\server.py"],
-      "env": {
-        "PYTHONPATH": "f:\\mcp_server_ms_access_control1"
-      }
-    }
-  }
-} 
-```
-### Desktop Application Usage
-
-You can also run the server as a standalone application:
-
-```bash
-# Activate your virtual environment first
-.venv\Scripts\activate
-
-# Run the server
-python server.py
-```
 
 ## Available Tools
 
@@ -457,82 +441,19 @@ The MCP server provides the following tools:
   - Handles form validation and error correction
   - Supports complex form layouts with subforms
 
-## Usage Examples
+📊 Report Creation Tools (v3 - NEW!)
+📋 create_report_from_source – Create complete Access reports in a single step
 
-### Creating a Database and Table
+📝 generate_report_template – Generate customizable text templates for Access reports
 
-```python
-# Create a new database
-create_database("my_library")
+🏗️ create_report_from_template – Create Access reports from text definitions
 
-# Create a table
-create_table("my_library", "books", "ID INT PRIMARY KEY, Title TEXT(255), Author TEXT(100), Year INT")
+✨ **Report Types Supported:**
+- **Tabular Reports** – Data displayed in rows and columns (default)
+- **Columnar Reports** – Data displayed in a single-column layout
+- **Custom Reports** – Fully customizable reports using templates
 
-# Insert some data
-insert_data("my_library", "books", [
-    {"ID": 1, "Title": "Python Programming", "Author": "John Doe", "Year": 2023},
-    {"ID": 2, "Title": "Database Design", "Author": "Jane Smith", "Year": 2022}
-])
-```
 
-### Querying Data
-
-```python
-# Select all books
-run_query("my_library", "SELECT * FROM books")
-
-# Filter by year
-run_query("my_library", "SELECT * FROM books WHERE Year > 2022")
-
-# Save a frequently used query
-save_query("my_library", "recent_books", "SELECT * FROM books WHERE Year > 2020")
-```
-
-### Creating Forms (v3 - NEW!)
-
-```python
-# Create a single form for data entry
-generate_form_template("my_library", "books", "single")
-create_form_from_llm_text("my_library", "books_form", form_template_text)
-
-# Create a subform for embedding
-generate_form_template("my_library", "authors", "subform")
-create_form_from_llm_text("my_library", "authors_subform", subform_template_text)
-
-# Create a main form with embedded subform
-generate_form_template(
-    "my_library", 
-    "books", 
-    "main",
-    subform_object_name="Form.authors_subform",
-    link_master_field="AuthorID",
-    link_child_field="AuthorID"
-)
-create_form_from_llm_text("my_library", "books_with_authors", main_form_template_text)
-```
-
-### VBA Integration (v2)
-
-```python
-# List all VBA modules
-list_vba_modules("my_library")
-
-# Create a VBA function
-vba_code = """
-Public Function CalculateLateFee(DaysLate As Integer) As Currency
-    If DaysLate <= 0 Then
-        CalculateLateFee = 0
-    ElseIf DaysLate <= 7 Then
-        CalculateLateFee = 1.00
-    Else
-        CalculateLateFee = 1.00 + (DaysLate - 7) * 0.50
-    End If
-End Function
-"""
-write_vba_module("my_library", "LibraryFunctions", vba_code)
-
-# Execute the VBA function
-result = run_vba_function("my_library", "CalculateLateFee", "10")
 ```
 import win32com.client
 adox = win32com.client.Dispatch("ADOX.Catalog")
