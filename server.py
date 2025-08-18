@@ -17,19 +17,33 @@ _last_template_type = None
 
 # --- Helper Functions ---
 
-# FIXED get_db_path function
+# IMPROVED get_db_path function with better path detection
 def get_db_path(db_name: str) -> str:
-    """Gets the full path for the database. Handles both absolute and relative paths."""
+    """Gets the full path for the database. Handles both absolute and relative paths.
+    Now includes better path detection and validation."""
+    
     # If the path is already absolute (e.g., "F:\...") use it directly.
     if os.path.isabs(db_name):
         if not db_name.lower().endswith(".accdb"):
             db_name += ".accdb"
         return db_name
     
-    # Otherwise, build the path in the user's home directory.
+    # For relative paths, try multiple locations in order of preference:
     if not db_name.lower().endswith(".accdb"):
         db_name += ".accdb"
-    return os.path.join(os.path.expanduser("~"), db_name)
+    
+    # 1. Current working directory (most common for development)
+    current_dir_path = os.path.join(os.getcwd(), db_name)
+    if os.path.exists(current_dir_path):
+        return current_dir_path
+    
+    # 2. User's home directory (original behavior)
+    home_dir_path = os.path.join(os.path.expanduser("~"), db_name)
+    if os.path.exists(home_dir_path):
+        return home_dir_path
+    
+    # 3. If neither exists, default to current directory (for new database creation)
+    return current_dir_path
 
 def get_driver() -> str:
     """Finds a suitable Microsoft Access ODBC driver."""
@@ -43,11 +57,7 @@ def get_driver() -> str:
             return d
     raise Exception("Access ODBC driver not found")
 
-# ... (the rest of your code from the previous correct answer is fine)
-# Make sure to copy the full script provided in the previous response,
-# as this snippet only shows the changed parts. The key is the new get_db_path
-# and the added `import re`.
-# I will paste the full code here again for clarity.
+
 
 def _run_query_internal(db_name: str, sql: str) -> str:
     """Internal helper to run any SQL query."""
@@ -190,6 +200,52 @@ def run_query(db_name: str, sql: str) -> str:
     return _run_query_internal(db_name, sql)
 
 @mcp.tool
+def find_database(db_name: str) -> str:
+    """Debug tool to find where a database file actually exists"""
+    possible_paths = []
+    
+    # Add the resolved path from get_db_path
+    resolved_path = get_db_path(db_name)
+    possible_paths.append(("get_db_path() result", resolved_path, os.path.exists(resolved_path)))
+    
+    # Add current directory
+    if not db_name.lower().endswith('.accdb'):
+        db_name_with_ext = db_name + '.accdb'
+    else:
+        db_name_with_ext = db_name
+    
+    current_dir = os.path.join(os.getcwd(), db_name_with_ext)
+    possible_paths.append(("Current directory", current_dir, os.path.exists(current_dir)))
+    
+    # Add home directory
+    home_dir = os.path.join(os.path.expanduser("~"), db_name_with_ext)
+    possible_paths.append(("Home directory", home_dir, os.path.exists(home_dir)))
+    
+    # If db_name looks like an absolute path, check it
+    if os.path.isabs(db_name):
+        possible_paths.append(("Absolute path (as-is)", db_name, os.path.exists(db_name)))
+        if not db_name.lower().endswith('.accdb'):
+            abs_with_ext = db_name + '.accdb'
+            possible_paths.append(("Absolute path + .accdb", abs_with_ext, os.path.exists(abs_with_ext)))
+    
+    result = f"Database search results for '{db_name}':\n"
+    result += f"Current working directory: {os.getcwd()}\n\n"
+    
+    found_any = False
+    for description, path, exists in possible_paths:
+        status = "✓ EXISTS" if exists else "✗ Not found"
+        result += f"{description}: {status}\n  {path}\n\n"
+        if exists:
+            found_any = True
+    
+    if found_any:
+        result += "✓ Database found in at least one location."
+    else:
+        result += "✗ Database not found in any checked location."
+    
+    return result
+
+@mcp.tool
 def list_tables(db_name: str) -> str:
     """List all tables in the database"""
     path = get_db_path(db_name)
@@ -211,6 +267,7 @@ def fix_access_sql_syntax(sql: str) -> str:
     Automatically fix common Access SQL syntax issues:
     1. Convert double quotes to single quotes for string literals
     2. Keep double quotes only for special cases like Format functions
+    3. Fix multiple JOIN syntax by adding proper parentheses
     """
     # Pattern to match string literals that should use single quotes
     # This matches double quotes that are NOT part of function calls like Format("yyyy-mm-dd")
@@ -234,6 +291,32 @@ def fix_access_sql_syntax(sql: str) -> str:
     sql = re.sub(r'IN\s*\(\s*"([^"]*)"', r"IN ('\1'", sql, flags=re.IGNORECASE)  # IN ("value" -> IN ('value'
     sql = re.sub(r'LIKE\s*"([^"]*)"', r"LIKE '\1'", sql, flags=re.IGNORECASE)  # LIKE "value" -> LIKE 'value'
     
+    # Fix multiple JOIN syntax for Access
+    # Access requires parentheses around multiple JOINs
+    # Pattern: FROM table1 INNER JOIN table2 ON ... INNER JOIN table3 ON ...
+    # Should become: FROM (table1 INNER JOIN table2 ON ...) INNER JOIN table3 ON ...
+    
+    # Find FROM clause with multiple INNER JOINs
+    from_pattern = r'FROM\s+([^()]+?)\s+INNER\s+JOIN\s+([^()]+?)\s+ON\s+([^()]+?)\s+INNER\s+JOIN'
+    if re.search(from_pattern, sql, re.IGNORECASE):
+        # Replace the pattern to add parentheses around the first JOIN
+        sql = re.sub(
+            from_pattern,
+            r'FROM (\1 INNER JOIN \2 ON \3) INNER JOIN',
+            sql,
+            flags=re.IGNORECASE
+        )
+    
+    # Handle LEFT JOIN cases too
+    from_pattern_left = r'FROM\s+([^()]+?)\s+LEFT\s+JOIN\s+([^()]+?)\s+ON\s+([^()]+?)\s+(?:INNER|LEFT)\s+JOIN'
+    if re.search(from_pattern_left, sql, re.IGNORECASE):
+        sql = re.sub(
+            from_pattern_left,
+            r'FROM (\1 LEFT JOIN \2 ON \3) INNER JOIN' if 'INNER JOIN' in sql.upper() else r'FROM (\1 LEFT JOIN \2 ON \3) LEFT JOIN',
+            sql,
+            flags=re.IGNORECASE
+        )
+    
     # Restore protected quotes
     for i, protected in enumerate(protected_patterns):
         sql = sql.replace(f"__PROTECTED_QUOTE_{i}__", protected)
@@ -246,6 +329,37 @@ def save_query(db_name: str, query_name: str, sql: str) -> str:
     Automatically fixes common Access SQL syntax issues like double quotes."""
     try:
         path = get_db_path(db_name)
+        
+        # FIRST: Check if database exists at the resolved path
+        if not os.path.exists(path):
+            # Try to find the database in common locations
+            possible_paths = []
+            
+            # If db_name is just a filename, try current directory
+            if not os.path.isabs(db_name):
+                current_dir_path = os.path.join(os.getcwd(), db_name)
+                if not db_name.lower().endswith('.accdb'):
+                    current_dir_path += '.accdb'
+                possible_paths.append(current_dir_path)
+            
+            # Try the original db_name as-is if it looks like a path
+            if os.path.isabs(db_name):
+                possible_paths.append(db_name)
+                if not db_name.lower().endswith('.accdb'):
+                    possible_paths.append(db_name + '.accdb')
+            
+            # Check each possible path
+            found_path = None
+            for check_path in possible_paths:
+                if os.path.exists(check_path):
+                    found_path = check_path
+                    break
+            
+            if found_path:
+                path = found_path
+                print(f"Database found at: {path}")
+            else:
+                return f"Error: Database not found. Tried paths:\n- {path}\n" + "\n".join(f"- {p}" for p in possible_paths)
         
         # Fix Access SQL syntax issues
         sql_fixed = fix_access_sql_syntax(sql)
@@ -270,9 +384,10 @@ def save_query(db_name: str, query_name: str, sql: str) -> str:
         
         access.CloseCurrentDatabase()
         access.Quit()
-        return f"Query '{query_name}' saved successfully."
+        return f"Query '{query_name}' saved successfully at: {path}"
     except Exception as e:
         return f"Error saving query: {str(e)}"
+
 
 
 
@@ -690,8 +805,305 @@ def run_vba_function(db_name: str, function_name: str, args: str = "") -> str:
         
     except Exception as e:
         return f"Error running VBA function: {str(e)}"
+
+def _generate_report_template_internal(db_name: str, record_source: str, report_type: str = "tabular") -> str:
+    """Internal helper function to generate report template without MCP tool wrapper."""
+    try:
+        # Validate record source and get fields
+        fields = _get_table_schema(db_name, record_source)
+        
+        report_guid = str(uuid.uuid4()).replace('-', '')
+        
+        # Generate controls based on report type
+        if report_type.lower() == "columnar":
+            # Columnar layout - fields stacked vertically
+            controls_text = ""
+            namemap_entries = []
+            y_pos = 500
+            
+            for i, field in enumerate(fields):
+                controls_text += f"""
+                Begin Label
+                    OverlapFlags =85
+                    Left =500
+                    Top ={y_pos}
+                    Width =2000
+                    Height =315
+                    Name ="{field}_Label"
+                    Caption ="{field}:"
+                    GUID = Begin
+                        0x{uuid.uuid4().hex}
+                    End
+                End
+                Begin TextBox
+                    OverlapFlags =85
+                    Left =2700
+                    Top ={y_pos}
+                    Width =4000
+                    Height =315
+                    Name ="{field}"
+                    ControlSource ="{field}"
+                    GUID = Begin
+                        0x{uuid.uuid4().hex}
+                    End
+                End"""
+                
+                # Add to NameMap
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=32))
+                field_hex = f"{field}_Label".encode('utf-16le').hex()
+                namemap_entries.append(f"0x{rand_hex}{len(f'{field}_Label'):02x}000000{field_hex}")
+                
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=32))
+                field_hex = field.encode('utf-16le').hex()
+                namemap_entries.append(f"0x{rand_hex}{len(field):02x}000000{field_hex}")
+                
+                y_pos += 400
+                
+        else:  # tabular layout (default)
+            # Header controls
+            header_controls = ""
+            detail_controls = ""
+            namemap_entries = []
+            x_pos = 500
+            
+            for i, field in enumerate(fields):
+                # Header label
+                header_controls += f"""
+                Begin Label
+                    OverlapFlags =85
+                    Left ={x_pos}
+                    Top =200
+                    Width =1500
+                    Height =315
+                    Name ="{field}_Header"
+                    Caption ="{field}"
+                    GUID = Begin
+                        0x{uuid.uuid4().hex}
+                    End
+                End"""
+                
+                # Detail textbox
+                detail_controls += f"""
+                Begin TextBox
+                    OverlapFlags =85
+                    Left ={x_pos}
+                    Top =200
+                    Width =1500
+                    Height =315
+                    Name ="{field}"
+                    ControlSource ="{field}"
+                    GUID = Begin
+                        0x{uuid.uuid4().hex}
+                    End
+                End"""
+                
+                # Add to NameMap
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=32))
+                field_hex = f"{field}_Header".encode('utf-16le').hex()
+                namemap_entries.append(f"0x{rand_hex}{len(f'{field}_Header'):02x}000000{field_hex}")
+                
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=32))
+                field_hex = field.encode('utf-16le').hex()
+                namemap_entries.append(f"0x{rand_hex}{len(field):02x}000000{field_hex}")
+                
+                x_pos += 1600
+            
+            controls_text = f"""
+        Begin Section
+            Height =600
+            Name ="ReportHeader"
+            Begin
+                Begin Label
+                    OverlapFlags =85
+                    Left =500
+                    Top =200
+                    Width =6000
+                    Height =400
+                    Name ="Title"
+                    Caption ="__REPORT_NAME_PLACEHOLDER__"
+                    FontSize =14
+                    FontWeight =700
+                    GUID = Begin
+                        0x{uuid.uuid4().hex}
+                    End
+                End
+            End
+        End
+        Begin Section
+            Height =600
+            Name ="PageHeader"
+            Begin
+                {header_controls}
+            End
+        End
+        Begin Section
+            Height =400
+            Name ="Detail"
+            Begin
+                {detail_controls}
+            End
+        End"""
+        
+        # Add Title to NameMap
+        rand_hex = ''.join(random.choices('0123456789abcdef', k=32))
+        field_hex = "Title".encode('utf-16le').hex()
+        namemap_entries.append(f"0x{rand_hex}05000000{field_hex}")
+        
+        # NameMap
+        namemap_text = ",\n        ".join(namemap_entries) + ",\n        0x000000000000000000000000000000000c000000050000000000000000000000000000000000"
+        
+        if report_type.lower() == "columnar":
+            template = f"""Version =21
+VersionRequired =20
+PublishOption =1
+Checksum ={random.randint(-2000000000, 2000000000)}
+Begin Report
+    Width =7400
+    PictureAlignment =2
+    GUID = Begin
+        0x{report_guid}
+    End
+    NameMap = Begin
+        {namemap_text}
+    End
+    RecordSource ="{record_source}"
+    Caption ="__REPORT_NAME_PLACEHOLDER__"
+    Begin
+        Begin Section
+            Height ={y_pos + 200}
+            Name ="Detail"
+            Begin
+                {controls_text}
+            End
+        End
+    End
+End"""
+        else:  # tabular
+            template = f"""Version =21
+VersionRequired =20
+PublishOption =1
+Checksum ={random.randint(-2000000000, 2000000000)}
+Begin Report
+    Width =7400
+    PictureAlignment =2
+    GUID = Begin
+        0x{report_guid}
+    End
+    NameMap = Begin
+        {namemap_text}
+    End
+    RecordSource ="{record_source}"
+    Caption ="__REPORT_NAME_PLACEHOLDER__"
+    Begin
+        {controls_text}
+    End
+End"""
+        
+        return template
+        
+    except Exception as e:
+        raise Exception(f"Error generating report template: {e}")
+
+def _create_report_from_template_internal(db_name: str, report_name: str, report_text: str) -> str:
+    """Internal helper function to create report from template without MCP tool wrapper."""
+    # Replace placeholder if it exists
+    if "__REPORT_NAME_PLACEHOLDER__" in report_text:
+        report_text = report_text.replace("__REPORT_NAME_PLACEHOLDER__", report_name)
+    
+    path = get_db_path(db_name)
+    temp_file_path = None
+    
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8') as tf:
+            tf.write(report_text)
+            temp_file_path = tf.name
+
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        AC_REPORT = 3
+        
+        try:
+            access.DoCmd.DeleteObject(AC_REPORT, report_name)
+        except Exception:
+            pass
+
+        access.LoadFromText(AC_REPORT, report_name, temp_file_path)
+
+        access.CloseCurrentDatabase()
+        access.Quit()
+
+        return f"Report '{report_name}' created successfully in database '{db_name}'."
+
+    except Exception as e:
+        raise Exception(f"Error creating report from template: {e}")
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+@mcp.tool
+def create_report_from_source(db_name: str, report_name: str, record_source: str, report_type: str = "tabular") -> str:
+    """Creates a complete Access report from a table or query in a single step.
+
+    This tool combines template generation and creation, making it more reliable.
+
+    Args:
+        db_name: The name of the database file (e.g., 'inventory.accdb').
+        report_name: The name to save the report as (e.g., 'ProductsReport').
+        record_source: The name of the table or saved query the report is based on.
+        report_type: Type of report layout - 'tabular' (default) or 'columnar'.
+    """
+    try:
+        # Step 1: Generate the report template using internal helper
+        report_text = _generate_report_template_internal(db_name, record_source, report_type)
+        
+        # Step 2: Create the report using internal helper
+        result = _create_report_from_template_internal(db_name, report_name, report_text)
+        
+        return result
+
+    except Exception as e:
+        return f"An unexpected error occurred in create_report_from_source: {e}"
+
+@mcp.tool
+def generate_report_template(db_name: str, record_source: str, report_type: str = "tabular") -> str:
+    """Generate a text template for an Access report that can be customized and created.
+    
+    Args:
+        db_name: The name of the database file
+        record_source: The name of the table or saved query the report is based on
+        report_type: Type of report layout - 'tabular' or 'columnar'
+    """
+    try:
+        template = _generate_report_template_internal(db_name, record_source, report_type)
+        
+        return f"""Report template generated successfully for {report_type} layout.
+IMPORTANT: 
+1. Replace '__REPORT_NAME_PLACEHOLDER__' with the desired report name.
+2. Review and customize the template below as needed.
+3. Pass the entire final text content to the 'create_report_from_template' tool.
+
+--- TEMPLATE BEGIN ---
+{template}
+--- TEMPLATE END ---"""
+        
+    except Exception as e:
+        return f"Error generating report template: {e}"
+
+@mcp.tool
+def create_report_from_template(db_name: str, report_name: str, report_text: str) -> str:
+    """Create an Access report from a text template definition.
+    
+    Args:
+        db_name: The name of the database file
+        report_name: The name to save the report as
+        report_text: The complete text definition of the report
+    """
+    try:
+        return _create_report_from_template_internal(db_name, report_name, report_text)
+    except Exception as e:
+        return f"Error creating report from template: {str(e)}"
             
 if __name__ == "__main__":
     mcp.run()
-
-
