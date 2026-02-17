@@ -489,6 +489,9 @@ def generate_form_template(
     namemap_text = ",\n        ".join(namemap_entries) + ",\n        0x000000000000000000000000000000000c000000050000000000000000000000000000000000"
 
     if form_type == 'main':
+        clean_subform_name = re.sub(r'^Form\.', '', subform_object_name)
+        subform_guid = uuid.uuid4().hex
+
         controls_text += f"""
                 Begin Subform
                     OverlapFlags =85
@@ -496,13 +499,13 @@ def generate_form_template(
                     Top ={y_pos + 200}
                     Width =10000
                     Height =4000
-                    TabIndex = {len(fields_to_show)}
-                    Name ="{re.sub(r'^Form\.', '', subform_object_name)}"
+                    TabIndex ={len(fields_to_show)}
+                    Name ="{clean_subform_name}"
                     SourceObject ="{subform_object_name}"
                     LinkChildFields ="{link_child_field}"
                     LinkMasterFields ="{link_master_field}"
                     GUID = Begin
-                        0x{uuid.uuid4().hex}
+                        0x{subform_guid}
                     End
                 End"""
 
