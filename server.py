@@ -139,6 +139,42 @@ def sanitize_access_schema(schema: str) -> str:
     schema = re.sub(r"\(\s*,", "(", schema)
     
     return schema.strip()
+@mcp.tool()
+def save_and_close_access_database(db_name: str) -> dict:
+    """
+    Save all changes and close the MS Access database.
+    If Access is not running, returns a safe success message.
+    """
+    try:
+        access_app = win32com.client.GetActiveObject("Access.Application")
+        current_db = access_app.CurrentDb()
+
+        if current_db is None:
+            return {"success": False, "message": "No database is currently open in Access."}
+
+        current_path = current_db.Name
+
+        if db_name.lower() not in current_path.lower():
+            return {
+                "success": False,
+                "message": f"The open database '{current_path}' does not match '{db_name}'."
+            }
+
+        access_app.DoCmd.Save()
+        access_app.Quit(1)  # acQuitSaveAll = 1
+
+        lock_file = current_path.replace('.accdb', '.laccdb')
+
+        return {
+            "success": True,
+            "message": f"'{current_path}' saved and closed successfully.",
+            "lock_file_released": not os.path.exists(lock_file)
+        }
+
+    except win32com.client.pywintypes.com_error:
+        return {"success": True, "message": "MS Access was not running. Nothing to close."}
+    except Exception as e:
+        return {"success": False, "message": f"Unexpected error: {str(e)}"}
 
 @mcp.tool
 def create_database(db_name: str) -> str:
@@ -1110,3 +1146,4 @@ def create_report_from_template(db_name: str, report_name: str, report_text: str
             
 if __name__ == "__main__":
     mcp.run()
+
