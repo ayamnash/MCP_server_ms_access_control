@@ -160,8 +160,14 @@ python server.py
 
 # **Prompt Samples**
 
+(1)Using msaccess MCP server to connect 
+C:\Users\it\AppData\Local\Programs\Kiro\treeview.accdb Make sure to save the changes and close the database using MCP tools.
+i creat form to display accounts as tree 
+look at image attached 7.1.png
+i need create report look like as 7.png image attached 
+using mcp to do that ?
 
- (1)Create a Microsoft Access database named pos.accdb in this path F:\mcp_server_ms_access_control
+ (2)Create a Microsoft Access database named pos.accdb in this path F:\mcp_server_ms_access_control
 
  for a Point of Sale (POS) system with the following structure:
 
@@ -239,7 +245,7 @@ All queries use parameter prompts [Start Date] and [End Date] so when you run th
 
 
 
-(2)using mcp server  to
+(3)using mcp server  to
 Create a complete Laundry Management application in Microsoft Access name laundry_managemet1.accdb in this folder path 
 F:\mcp_server_ms_access_control1.
 
@@ -290,7 +296,7 @@ creat report named sales_dm from sales_dm query
 
 
 
-(3)using mcp server  to
+(4)using mcp server  to
 Create a complete Microsoft Access database for managing a school named School_Management.accdb in this folder path F:\mcp_server_ms_access_control1 . 
 The database should include all necessary tables, queries, forms, and reports, each with clear and consistent naming. The system should support student enrollment, teacher assignments, class schedules, grades, attendance, and fee tracking.
 
@@ -570,6 +576,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
