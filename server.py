@@ -1,4 +1,3 @@
-
 import os
 import pyodbc
 from fastmcp import FastMCP
@@ -1800,3 +1799,4 @@ def create_report_from_template(db_name: str, report_name: str, report_text: str
             
 if __name__ == "__main__":
     mcp.run()
+
