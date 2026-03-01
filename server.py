@@ -310,6 +310,54 @@ def _get_table_schema(db_name: str, table_name: str) -> list[str]:
             return columns
     except Exception as e:
         raise ValueError(f"Could not retrieve schema for table or query '{table_name}'. Error: {e}")
+def sanitize_vba_code(code: str) -> str:
+    """Clean VBA code by removing duplicate declarations that Access adds automatically
+    
+    Args:
+        code: Raw VBA code string
+        
+    Returns:
+        Cleaned VBA code
+    """
+    if not code:
+        return code
+    
+    lines = code.split('\n')
+    cleaned_lines = []
+    
+    # Track if we've seen these declarations (Access adds them automatically)
+    seen_option_compare = False
+    seen_option_explicit = False
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Skip duplicate "Option Compare Database" (Access adds this automatically)
+        if stripped.lower() == "option compare database":
+            if not seen_option_compare:
+                seen_option_compare = True
+                # Skip it - Access will add it automatically
+                continue
+            else:
+                # Duplicate found, skip it
+                logger.info("Removed duplicate 'Option Compare Database'")
+                continue
+        
+        # Keep "Option Explicit" if present (it's useful)
+        if stripped.lower() == "option explicit":
+            if not seen_option_explicit:
+                seen_option_explicit = True
+                cleaned_lines.append(line)
+            else:
+                # Duplicate found, skip it
+                logger.info("Removed duplicate 'Option Explicit'")
+            continue
+        
+        # Keep all other lines
+        cleaned_lines.append(line)
+    
+    return '\n'.join(cleaned_lines)
+
 def sanitize_access_schema(schema: str) -> str:
     replacements = {
         r"\bAUTOINCREMENT\b": "COUNTER",
@@ -345,11 +393,53 @@ def sanitize_access_schema(schema: str) -> str:
     schema = re.sub(r"\(\s*,", "(", schema)
     
     return schema.strip()
+
+def check_vba_compilation_errors(access_app) -> Tuple[bool, str]:
+    """Check if there are VBA compilation errors in the current database
+    
+    Args:
+        access_app: Active Access.Application COM object
+        
+    Returns:
+        Tuple of (has_errors: bool, error_message: str)
+    """
+    try:
+        # Try to access the VBA project
+        project = access_app.VBE.VBProjects(1)
+        
+        # Try to compile the project
+        # Note: This doesn't actually compile, but accessing modules can reveal errors
+        for i in range(1, project.VBComponents.Count + 1):
+            try:
+                component = project.VBComponents(i)
+                # Try to access the code module
+                if component.CodeModule.CountOfLines > 0:
+                    # Just accessing it can trigger compilation
+                    _ = component.CodeModule.Lines(1, 1)
+            except Exception as comp_ex:
+                error_msg = str(comp_ex)
+                if "compile" in error_msg.lower() or "syntax" in error_msg.lower():
+                    logger.warning(f"VBA compilation error detected in {component.Name}: {error_msg}")
+                    return True, f"VBA compilation error in {component.Name}: {error_msg}"
+        
+        return False, "No VBA compilation errors detected"
+        
+    except Exception as e:
+        # If we can't check, assume no errors (or VBA is protected)
+        logger.info(f"Could not check VBA compilation (may be protected): {e}")
+        return False, "VBA check skipped (protected or no VBA)"
 @mcp.tool()
-def save_and_close_access_database(db_name: str) -> dict:
+def save_and_close_access_database(db_name: str, force_close: bool = False) -> dict:
     """
     Save all changes and close the MS Access database.
     If Access is not running, returns a safe success message.
+    
+    Args:
+        db_name: Database name or path
+        force_close: If True, force close even if there are VBA compilation errors
+    
+    Returns:
+        dict with success status and message
     """
     try:
         access_app = win32com.client.GetActiveObject("Access.Application")
@@ -366,20 +456,132 @@ def save_and_close_access_database(db_name: str) -> dict:
                 "message": f"The open database '{current_path}' does not match '{db_name}'."
             }
 
-        access_app.DoCmd.Save()
-        access_app.Quit(1)  # acQuitSaveAll = 1
+        # Try to save first
+        save_attempted = False
+        save_error = None
+        try:
+            access_app.DoCmd.Save()
+            save_attempted = True
+            logger.info("Database saved successfully")
+        except Exception as save_ex:
+            save_error = str(save_ex)
+            logger.warning(f"Could not save database (may have VBA errors): {save_error}")
+            
+            # If force_close is True, we'll continue to close anyway
+            if not force_close:
+                return {
+                    "success": False,
+                    "message": f"Cannot save database (VBA compilation errors?): {save_error}. Use force_close=True to close without saving.",
+                    "vba_error": True
+                }
 
+        # Try to close gracefully with save
+        close_method = None
+        try:
+            if force_close or save_error:
+                # Force close without saving if there were save errors
+                logger.info("Attempting force close (acQuitSaveNone)")
+                access_app.Quit(2)  # acQuitSaveNone = 2 (don't save)
+                close_method = "force_close_no_save"
+            else:
+                # Normal close with save
+                logger.info("Attempting normal close (acQuitSaveAll)")
+                access_app.Quit(1)  # acQuitSaveAll = 1
+                close_method = "normal_close_with_save"
+        except Exception as quit_ex:
+            logger.warning(f"Quit command failed: {quit_ex}, trying alternative method")
+            try:
+                # Alternative: Close current database then quit
+                access_app.CloseCurrentDatabase()
+                access_app.Quit()
+                close_method = "alternative_close"
+            except Exception as alt_ex:
+                logger.error(f"Alternative close also failed: {alt_ex}")
+                return {
+                    "success": False,
+                    "message": f"Could not close Access: {alt_ex}. Please close manually.",
+                    "close_error": True
+                }
+
+        # Wait a moment for Access to close
+        time.sleep(0.5)
+        
         lock_file = current_path.replace('.accdb', '.laccdb')
+        lock_released = not os.path.exists(lock_file)
 
         return {
             "success": True,
-            "message": f"'{current_path}' saved and closed successfully.",
-            "lock_file_released": not os.path.exists(lock_file)
+            "message": f"'{current_path}' closed successfully using {close_method}.",
+            "lock_file_released": lock_released,
+            "save_attempted": save_attempted,
+            "save_error": save_error,
+            "force_close_used": force_close,
+            "warning": "Database closed without saving due to VBA errors" if save_error else None
         }
 
     except win32com.client.pywintypes.com_error:
         return {"success": True, "message": "MS Access was not running. Nothing to close."}
     except Exception as e:
+        logger.error(f"Unexpected error in save_and_close: {e}")
+        return {"success": False, "message": f"Unexpected error: {str(e)}"}
+
+@mcp.tool()
+def force_close_access(db_name: str = None) -> dict:
+    """
+    Force close MS Access without saving, useful when there are VBA compilation errors.
+    This is a convenience wrapper around save_and_close_access_database with force_close=True.
+    
+    Args:
+        db_name: Optional database name for verification (if None, closes any open database)
+    
+    Returns:
+        dict with success status and message
+    """
+    try:
+        access_app = win32com.client.GetActiveObject("Access.Application")
+        
+        if db_name:
+            current_db = access_app.CurrentDb()
+            if current_db:
+                current_path = current_db.Name
+                if db_name.lower() not in current_path.lower():
+                    return {
+                        "success": False,
+                        "message": f"The open database '{current_path}' does not match '{db_name}'."
+                    }
+        
+        logger.info("Force closing Access without saving")
+        
+        try:
+            # Force quit without saving
+            access_app.Quit(2)  # acQuitSaveNone = 2
+            time.sleep(0.5)
+            return {
+                "success": True,
+                "message": "Access force closed successfully (no save).",
+                "warning": "Database was NOT saved before closing"
+            }
+        except Exception as quit_ex:
+            logger.warning(f"Quit(2) failed: {quit_ex}, trying alternative")
+            try:
+                access_app.CloseCurrentDatabase()
+                access_app.Quit()
+                time.sleep(0.5)
+                return {
+                    "success": True,
+                    "message": "Access closed using alternative method (no save).",
+                    "warning": "Database was NOT saved before closing"
+                }
+            except Exception as alt_ex:
+                return {
+                    "success": False,
+                    "message": f"Could not force close: {alt_ex}. Please close manually."
+                }
+                
+    except win32com.client.pywintypes.com_error:
+        return {"success": True, "message": "MS Access was not running. Nothing to close."}
+    except Exception as e:
+        logger.error(f"Unexpected error in force_close: {e}")
         return {"success": False, "message": f"Unexpected error: {str(e)}"}
 
 @mcp.tool
@@ -401,21 +603,25 @@ def create_table(db_name: str, table_name: str, schema: str) -> str:
     sql = f"CREATE TABLE [{table_name}] ({sanitized_schema})"
     
     # Debug output to see what's happening
-    print(f"Original schema: {schema}")
-    print(f"Sanitized schema: {sanitized_schema}")
-    print(f"Final SQL: {sql}")
+    logger.debug(f"Original schema: {schema}")
+    logger.debug(f"Sanitized schema: {sanitized_schema}")
+    logger.debug(f"Final SQL: {sql}")
     
     try:
         driver = get_driver()
         conn_str = f"DRIVER={{{driver}}};DBQ={db_path};"
-        conn = pyodbc.connect(conn_str)
-        cur = conn.cursor()
-        cur.execute(sql)
-        conn.commit()
-        cur.close()
-        conn.close()
+        
+        # Use 'with' statement to ensure connection is closed
+        with pyodbc.connect(conn_str) as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            conn.commit()
+            cursor.close()
+        
+        logger.info(f"Table '{table_name}' created successfully")
         return f"Table '{table_name}' created successfully."
     except Exception as e:
+        logger.error(f"Error creating table '{table_name}': {e}")
         return f"Error creating table '{table_name}': {str(e)}"
     
 
@@ -1007,6 +1213,7 @@ def write_vba_module(db_name: str, module_name: str, code: str) -> str:
     """Create or replace a VBA module with the provided code.
     
     Automatically saves and closes the database to prevent lock issues.
+    Automatically removes duplicate "Option Compare Database" declarations.
     
     Args:
         db_name: Database name or path
@@ -1031,6 +1238,10 @@ def write_vba_module(db_name: str, module_name: str, code: str) -> str:
         logger.error("VBA code cannot be empty")
         return "Error: VBA code cannot be empty"
     
+    # Clean the VBA code (remove duplicate Option Compare Database, etc.)
+    cleaned_code = sanitize_vba_code(code)
+    logger.debug(f"VBA code sanitized (original: {len(code)} chars, cleaned: {len(cleaned_code)} chars)")
+    
     def operation(access):
         """Inner function that does the actual work"""
         logger.info(f"Writing VBA module: {module_name}")
@@ -1040,15 +1251,18 @@ def write_vba_module(db_name: str, module_name: str, code: str) -> str:
         
         # Check if module already exists
         module_exists = False
+        component_to_save = None
+        
         for i in range(1, project.VBComponents.Count + 1):
             component = project.VBComponents(i)
             if component.Name.lower() == module_name.lower():
                 # Clear existing code
                 if component.CodeModule.CountOfLines > 0:
                     component.CodeModule.DeleteLines(1, component.CodeModule.CountOfLines)
-                # Add new code
-                component.CodeModule.AddFromString(code)
+                # Add new code (cleaned)
+                component.CodeModule.AddFromString(cleaned_code)
                 module_exists = True
+                component_to_save = component
                 logger.info(f"Updated existing module: {module_name}")
                 break
         
@@ -1056,8 +1270,31 @@ def write_vba_module(db_name: str, module_name: str, code: str) -> str:
             # Create new standard module
             new_module = project.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
             new_module.Name = module_name
-            new_module.CodeModule.AddFromString(code)
+            new_module.CodeModule.AddFromString(cleaned_code)
+            component_to_save = new_module
             logger.info(f"Created new module: {module_name}")
+        
+        # IMPORTANT: Save the VBA project explicitly
+        try:
+            # Method 1: Try to save the component
+            access.DoCmd.Save(5, module_name)  # 5 = acModule
+            logger.debug(f"Saved VBA module using DoCmd.Save")
+        except Exception as e1:
+            logger.debug(f"DoCmd.Save failed: {e1}, trying alternative")
+            try:
+                # Method 2: Save the database (forces VBA save)
+                access.DoCmd.Save()
+                logger.debug(f"Saved database (includes VBA)")
+            except Exception as e2:
+                logger.debug(f"DoCmd.Save() failed: {e2}, VBA may not be saved")
+        
+        # Force a compile to ensure code is valid
+        try:
+            # This will throw an error if there are compilation errors
+            access.DoCmd.RunCommand(7)  # 7 = acCmdCompileAndSaveAllModules
+            logger.debug("VBA compiled successfully")
+        except Exception as e:
+            logger.warning(f"Could not compile VBA (may have errors): {e}")
         
         action = "updated" if module_exists else "created"
         return f"VBA module '{module_name}' {action} successfully"
