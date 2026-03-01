@@ -7,15 +7,221 @@ import win32com.client
 import uuid
 import random
 import tempfile
-import re # 
+import re
+import gc
+import pythoncom
+import time
+import logging
+from typing import Callable, Tuple, Optional, List, Dict, Any
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP("Flexible Access DB MCP")
+
+# --- Configuration ---
+class Config:
+    """Configuration settings for the MCP server"""
+    LOCK_TIMEOUT = 10  # seconds to wait for lock release
+    CLEANUP_DELAY = 0.5  # seconds to wait after cleanup
+    MAX_RETRIES = 3  # maximum retry attempts for transient errors
+    RETRY_DELAY = 1.0  # seconds between retries
+    POLL_INTERVAL = 0.5  # seconds between lock file checks
 
 # --- State Tracking ---
 _template_generated = False
 _last_template_type = None
+_batch_mode_db = None
+_batch_mode_access = None
 
 # --- Helper Functions ---
+
+def _ensure_access_closed():
+    """Force close all Access instances and clean up COM objects"""
+    try:
+        access = win32com.client.GetActiveObject("Access.Application")
+        try:
+            access.Quit(1)  # acQuitSaveAll
+            logger.debug("Successfully closed active Access instance")
+        except win32com.client.pywintypes.com_error as e:
+            logger.warning(f"COM error while closing Access: {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error while closing Access: {e}")
+        finally:
+            del access
+    except win32com.client.pywintypes.com_error:
+        # No active Access instance - this is expected
+        logger.debug("No active Access instance to close")
+    except Exception as e:
+        logger.warning(f"Unexpected error in _ensure_access_closed: {e}")
+    
+    # Force COM cleanup
+    try:
+        pythoncom.CoUninitialize()
+    except Exception as e:
+        logger.debug(f"CoUninitialize error (may be expected): {e}")
+    
+    try:
+        pythoncom.CoInitialize()
+    except Exception as e:
+        logger.debug(f"CoInitialize error (may be expected): {e}")
+    
+    gc.collect()
+    time.sleep(Config.CLEANUP_DELAY)
+
+def _with_access_database(db_name: str, operation_func: Callable) -> Any:
+    """Context manager pattern for Access operations with automatic cleanup
+    
+    Args:
+        db_name: Database name or path
+        operation_func: Function that takes access object and returns result
+        
+    Returns:
+        Result from operation_func
+        
+    Raises:
+        Exception: If operation fails after retries
+    """
+    path = get_db_path(db_name)
+    access = None
+    
+    try:
+        # Check if in batch mode
+        global _batch_mode_access, _batch_mode_db
+        if _batch_mode_access and _batch_mode_db == db_name:
+            logger.debug(f"Using existing batch connection for {db_name}")
+            return operation_func(_batch_mode_access)
+        
+        # Normal mode - open, execute, close
+        logger.info(f"Opening database: {path}")
+        access = win32com.client.Dispatch("Access.Application")
+        access.Visible = False
+        access.OpenCurrentDatabase(path)
+        
+        result = operation_func(access)
+        
+        # Save and close
+        try:
+            access.DoCmd.Save()
+            logger.debug("Database saved successfully")
+        except Exception as e:
+            logger.debug(f"Save not needed or failed (may be expected): {e}")
+        
+        access.CloseCurrentDatabase()
+        access.Quit(1)
+        logger.info(f"Database closed successfully: {path}")
+        
+        return result
+        
+    except win32com.client.pywintypes.com_error as e:
+        logger.error(f"COM error in database operation: {e}")
+        raise Exception(f"COM error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error in database operation: {e}")
+        raise
+    finally:
+        if access and not _batch_mode_access:
+            try:
+                access.Quit(1)
+            except Exception as e:
+                logger.debug(f"Error during final quit (may be expected): {e}")
+            del access
+            _ensure_access_closed()
+
+def is_database_locked(db_path: str) -> bool:
+    """Check if database has an active lock file
+    
+    Args:
+        db_path: Full path to database file
+        
+    Returns:
+        True if lock file exists, False otherwise
+    """
+    lock_file = db_path.replace('.accdb', '.laccdb')
+    locked = os.path.exists(lock_file)
+    if locked:
+        logger.warning(f"Database is locked: {lock_file}")
+    return locked
+
+def wait_for_lock_release(db_path: str, timeout: Optional[int] = None) -> Tuple[bool, str]:
+    """Wait for lock file to be released
+    
+    Args:
+        db_path: Full path to database file
+        timeout: Maximum seconds to wait (default: Config.LOCK_TIMEOUT)
+        
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    if timeout is None:
+        timeout = Config.LOCK_TIMEOUT
+        
+    lock_file = db_path.replace('.accdb', '.laccdb')
+    
+    if not os.path.exists(lock_file):
+        return True, "Database is not locked"
+    
+    logger.info(f"Waiting for lock release: {lock_file} (timeout: {timeout}s)")
+    start_time = time.time()
+    
+    while os.path.exists(lock_file):
+        elapsed = time.time() - start_time
+        if elapsed > timeout:
+            msg = f"Timeout: Database still locked after {timeout} seconds. Please close MS Access manually."
+            logger.error(msg)
+            return False, msg
+        time.sleep(Config.POLL_INTERVAL)
+    
+    logger.info(f"Lock released after {time.time() - start_time:.1f} seconds")
+    return True, "Lock released"
+
+def _validate_module_name(module_name: str) -> Tuple[bool, str]:
+    """Validate VBA module name
+    
+    Args:
+        module_name: Name to validate
+        
+    Returns:
+        Tuple of (is_valid: bool, error_message: str)
+    """
+    if not module_name or not module_name.strip():
+        return False, "Module name cannot be empty"
+    
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', module_name):
+        return False, "Module name must be a valid VBA identifier (letters, numbers, underscore; cannot start with number)"
+    
+    if len(module_name) > 64:
+        return False, "Module name too long (max 64 characters)"
+    
+    # VBA reserved words
+    reserved = ['Sub', 'Function', 'End', 'If', 'Then', 'Else', 'For', 'Next', 'Do', 'Loop', 
+                'While', 'Select', 'Case', 'Dim', 'As', 'Integer', 'String', 'Boolean']
+    if module_name in reserved:
+        return False, f"Module name '{module_name}' is a VBA reserved word"
+    
+    return True, ""
+
+def _validate_database_name(db_name: str) -> Tuple[bool, str]:
+    """Validate database name/path
+    
+    Args:
+        db_name: Database name or path to validate
+        
+    Returns:
+        Tuple of (is_valid: bool, error_message: str)
+    """
+    if not db_name or not db_name.strip():
+        return False, "Database name cannot be empty"
+    
+    # Check for path traversal attempts
+    if '..' in db_name:
+        return False, "Database name cannot contain '..' (path traversal)"
+    
+    return True, ""
 
 # IMPROVED get_db_path function with better path detection
 def get_db_path(db_name: str) -> str:
@@ -362,67 +568,75 @@ def fix_access_sql_syntax(sql: str) -> str:
 @mcp.tool
 def save_query(db_name: str, query_name: str, sql: str) -> str:
     """Save or overwrite a named query in an Access database.
-    Automatically fixes common Access SQL syntax issues like double quotes."""
-    try:
-        path = get_db_path(db_name)
+    Automatically fixes common Access SQL syntax issues like double quotes.
+    
+    Args:
+        db_name: Database name or path
+        query_name: Name for the saved query
+        sql: SQL query text
         
-        # FIRST: Check if database exists at the resolved path
-        if not os.path.exists(path):
-            # Try to find the database in common locations
-            possible_paths = []
-            
-            # If db_name is just a filename, try current directory
-            if not os.path.isabs(db_name):
-                current_dir_path = os.path.join(os.getcwd(), db_name)
-                if not db_name.lower().endswith('.accdb'):
-                    current_dir_path += '.accdb'
-                possible_paths.append(current_dir_path)
-            
-            # Try the original db_name as-is if it looks like a path
-            if os.path.isabs(db_name):
-                possible_paths.append(db_name)
-                if not db_name.lower().endswith('.accdb'):
-                    possible_paths.append(db_name + '.accdb')
-            
-            # Check each possible path
-            found_path = None
-            for check_path in possible_paths:
-                if os.path.exists(check_path):
-                    found_path = check_path
-                    break
-            
-            if found_path:
-                path = found_path
-                print(f"Database found at: {path}")
-            else:
-                return f"Error: Database not found. Tried paths:\n- {path}\n" + "\n".join(f"- {p}" for p in possible_paths)
+    Returns:
+        Success or error message
+    """
+    # Validate inputs
+    is_valid, error_msg = _validate_database_name(db_name)
+    if not is_valid:
+        logger.error(f"Invalid database name: {error_msg}")
+        return f"Error: {error_msg}"
+    
+    if not query_name or not query_name.strip():
+        logger.error("Query name cannot be empty")
+        return "Error: Query name cannot be empty"
+    
+    if not sql or not sql.strip():
+        logger.error("SQL cannot be empty")
+        return "Error: SQL cannot be empty"
+    
+    def operation(access):
+        """Inner function to save the query"""
+        logger.info(f"Saving query: {query_name}")
         
         # Fix Access SQL syntax issues
         sql_fixed = fix_access_sql_syntax(sql)
         
-        # For COM interface, we need to escape double quotes in the SQL
-        # This is specifically for cases like Format(field, "yyyy-mm-dd")
+        # For COM interface, escape double quotes
         sql_escaped = sql_fixed.replace('"', '""')
         
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
         dao = access.CurrentDb()
         
         # Delete existing query if it exists
         try:
             dao.QueryDefs.Delete(query_name)
+            logger.debug(f"Deleted existing query: {query_name}")
         except Exception:
-            pass  # Query doesn't exist, that's fine
+            logger.debug(f"Query {query_name} doesn't exist (creating new)")
         
         # Create new query with escaped SQL
         dao.CreateQueryDef(query_name, sql_escaped)
+        logger.info(f"Query '{query_name}' saved successfully")
         
-        access.CloseCurrentDatabase()
-        access.Quit()
-        return f"Query '{query_name}' saved successfully at: {path}"
+        return f"Query '{query_name}' saved successfully"
+    
+    try:
+        path = get_db_path(db_name)
+        
+        # Check if database exists
+        if not os.path.exists(path):
+            logger.error(f"Database not found: {path}")
+            return f"Error: Database not found at {path}"
+        
+        # Check for lock
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path)
+            if not success:
+                return f"Error: {message}"
+        
+        result = _with_access_database(db_name, operation)
+        return result
+        
     except Exception as e:
-        return f"Error saving query: {str(e)}"
+        logger.error(f"Error saving query '{query_name}': {e}")
+        return f"Error saving query '{query_name}': {str(e)}"
 
 
 
@@ -595,8 +809,8 @@ IMPORTANT:
 
 @mcp.tool
 def create_form_from_llm_text(db_name: str, form_name: str, form_text: str) -> str:
-    """
-    STEP 2/2 for creating a form. Creates an Access form from its text definition.
+    """STEP 2/2 for creating a form. Creates an Access form from its text definition.
+    
     This tool will automatically correct/generate the NameMap and GUIDs based on the
     controls found in the form_text, making it robust against LLM-generated errors.
     
@@ -604,18 +818,36 @@ def create_form_from_llm_text(db_name: str, form_name: str, form_text: str) -> s
         db_name: The name of the database file (e.g., 'inventory.accdb'). Can be an absolute path.
         form_name: The name to save the form as (e.g., 'ProductsForm').
         form_text: The complete text definition of the form.
+        
+    Returns:
+        Success or error message
     """
+    # Validate inputs
+    is_valid, error_msg = _validate_database_name(db_name)
+    if not is_valid:
+        logger.error(f"Invalid database name: {error_msg}")
+        return f"Error: {error_msg}"
+    
+    if not form_name or not form_name.strip():
+        logger.error("Form name cannot be empty")
+        return "Error: Form name cannot be empty"
+    
+    if not form_text or not form_text.strip():
+        logger.error("Form text cannot be empty")
+        return "Error: Form text cannot be empty"
     
     # --- PRE-PROCESSING AND VALIDATION ---
     try:
+        logger.info(f"Pre-processing form: {form_name}")
+        
         # 1. Replace placeholder if it exists
         if "__FORM_NAME_PLACEHOLDER__" in form_text:
              form_text = form_text.replace("__FORM_NAME_PLACEHOLDER__", form_name)
 
         # 2. Find all controls with a 'Name' property
-        # This regex finds 'Name ="ControlName"' and captures 'ControlName'
         control_names = re.findall(r'^\s*Name\s*=\s*"([^"]+)"', form_text, re.MULTILINE)
         if not control_names:
+            logger.error("No named controls found in form text")
             return "Error: Could not find any named controls in the form text to build a NameMap."
 
         # 3. Generate a fresh, correct NameMap
@@ -623,7 +855,6 @@ def create_form_from_llm_text(db_name: str, form_name: str, form_text: str) -> s
         for name in control_names:
             rand_hex = ''.join(random.choices('0123456789abcdef', k=32))
             field_hex = name.encode('utf-16le').hex()
-            # The format is: {random_guid}{hex_len_of_name}{padding}{hex_encoded_name}
             namemap_entries.append(f"0x{rand_hex}{len(name):02x}000000{field_hex}")
         
         # Add the required terminator for the NameMap
@@ -635,68 +866,78 @@ def create_form_from_llm_text(db_name: str, form_name: str, form_text: str) -> s
         # 4. Replace the old NameMap in the text with our new, correct one
         form_text = re.sub(r'NameMap\s*=\s*Begin.*?End', new_namemap_text, form_text, flags=re.DOTALL)
 
-        # 5. Find and fix all GUIDs. Replace any invalid ones.
+        # 5. Find and fix all GUIDs
         def replace_guid(match):
             guid_content = match.group(1).strip().replace('0x', '')
             if len(guid_content) == 32 and all(c in '0123456789abcdefABCDEF' for c in guid_content):
-                return match.group(0) # It's a valid GUID, leave it alone
+                return match.group(0)
             else:
-                # It's invalid (wrong length, bad chars), so replace it
                 return f"GUID = Begin\n            0x{uuid.uuid4().hex}\n        End"
 
         form_text = re.sub(r'GUID\s*=\s*Begin(.*?)End', replace_guid, form_text, flags=re.DOTALL)
+        
+        logger.debug("Form text pre-processing completed")
 
     except Exception as e:
+        logger.error(f"Error during form pre-processing: {e}")
         return f"An unexpected error occurred during pre-processing: {e}"
 
-
-    # --- THE REST OF THE FUNCTION IS THE SAME ---
-    path = get_db_path(db_name)
-    temp_file_path = None
-    
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8') as tf:
-            tf.write(form_text)
-            temp_file_path = tf.name
-
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
+    def operation(access):
+        """Inner function to create the form"""
+        logger.info(f"Creating form: {form_name}")
         
-        AC_FORM = 2
-        
+        # Write to temp file
+        temp_file_path = None
         try:
-            access.DoCmd.DeleteObject(AC_FORM, form_name)
-        except Exception:
-            pass
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8') as tf:
+                tf.write(form_text)
+                temp_file_path = tf.name
+            
+            AC_FORM = 2
+            
+            # Delete existing form if it exists
+            try:
+                access.DoCmd.DeleteObject(AC_FORM, form_name)
+                logger.debug(f"Deleted existing form: {form_name}")
+            except Exception:
+                logger.debug(f"Form {form_name} doesn't exist (creating new)")
 
-        access.LoadFromText(AC_FORM, form_name, temp_file_path)
+            # Load form from text file
+            access.LoadFromText(AC_FORM, form_name, temp_file_path)
+            logger.info(f"Form '{form_name}' created successfully")
+            
+            global _template_generated, _last_template_type
+            _template_generated = False
+            _last_template_type = None
 
-        access.CloseCurrentDatabase()
-        access.Quit()
+            return f"Form '{form_name}' created successfully in database '{db_name}'."
+            
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                logger.debug("Temp file cleaned up")
 
-        global _template_generated, _last_template_type
-        _template_generated = False
-        _last_template_type = None
-
-        return f"Form '{form_name}' created successfully in database '{db_name}'."
-
+    try:
+        path = get_db_path(db_name)
+        
+        # Check for lock
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path)
+            if not success:
+                return f"Error: {message}"
+        
+        result = _with_access_database(db_name, operation)
+        return result
+        
     except Exception as e:
+        logger.error(f"Error creating form '{form_name}': {e}")
         return f"Error creating form from text: {str(e)}"
-    finally:
-        if temp_file_path and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
 
 @mcp.tool
 def list_vba_modules(db_name: str) -> str:
     """List all VBA modules in the Access database"""
-    try:
-        path = get_db_path(db_name)
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
-        
-        # Access the VBA project
+    
+    def operation(access):
         project = access.VBE.VBProjects(1)
         
         modules = []
@@ -711,55 +952,88 @@ def list_vba_modules(db_name: str) -> str:
             
             modules.append(f"- {component.Name} ({module_type})")
         
-        access.Quit()
-        
         if modules:
             return "VBA Modules:\n" + "\n".join(modules)
         else:
             return "No VBA modules found"
-            
+    
+    try:
+        path = get_db_path(db_name)
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path, timeout=10)
+            if not success:
+                return f"Error: {message}"
+        
+        result = _with_access_database(db_name, operation)
+        return result
+        
     except Exception as e:
         return f"Error listing VBA modules: {str(e)}"
 
 @mcp.tool
 def read_vba_module(db_name: str, module_name: str) -> str:
     """Read the code from a specific VBA module"""
-    try:
-        path = get_db_path(db_name)
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
-        
-        # Access the VBA project
+    
+    def operation(access):
         project = access.VBE.VBProjects(1)
         
         # Find the specific module
-        module_found = False
         for i in range(1, project.VBComponents.Count + 1):
             component = project.VBComponents(i)
             if component.Name.lower() == module_name.lower():
-                code = component.CodeModule.Lines(1, component.CodeModule.CountOfLines)
-                module_found = True
-                break
+                if component.CodeModule.CountOfLines > 0:
+                    code = component.CodeModule.Lines(1, component.CodeModule.CountOfLines)
+                    return f"VBA Code from module '{module_name}':\n\n{code}"
+                else:
+                    return f"Module '{module_name}' exists but is empty"
         
-        access.Quit()
+        return f"Module '{module_name}' not found"
+    
+    try:
+        path = get_db_path(db_name)
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path, timeout=10)
+            if not success:
+                return f"Error: {message}"
         
-        if module_found:
-            return f"VBA Code from module '{module_name}':\n\n{code}"
-        else:
-            return f"Module '{module_name}' not found"
-            
+        result = _with_access_database(db_name, operation)
+        return result
+        
     except Exception as e:
-        return f"Error reading VBA module: {str(e)}"
+        return f"Error reading VBA module '{module_name}': {str(e)}"
 
 @mcp.tool
 def write_vba_module(db_name: str, module_name: str, code: str) -> str:
-    """Create or replace a VBA module with the provided code"""
-    try:
-        path = get_db_path(db_name)
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
+    """Create or replace a VBA module with the provided code.
+    
+    Automatically saves and closes the database to prevent lock issues.
+    
+    Args:
+        db_name: Database name or path
+        module_name: Name for the VBA module (must be valid VBA identifier)
+        code: VBA code to write
+        
+    Returns:
+        Success or error message
+    """
+    # Validate inputs
+    is_valid, error_msg = _validate_database_name(db_name)
+    if not is_valid:
+        logger.error(f"Invalid database name: {error_msg}")
+        return f"Error: {error_msg}"
+    
+    is_valid, error_msg = _validate_module_name(module_name)
+    if not is_valid:
+        logger.error(f"Invalid module name: {error_msg}")
+        return f"Error: {error_msg}"
+    
+    if not code or not code.strip():
+        logger.error("VBA code cannot be empty")
+        return "Error: VBA code cannot be empty"
+    
+    def operation(access):
+        """Inner function that does the actual work"""
+        logger.info(f"Writing VBA module: {module_name}")
         
         # Access the VBA project
         project = access.VBE.VBProjects(1)
@@ -770,10 +1044,12 @@ def write_vba_module(db_name: str, module_name: str, code: str) -> str:
             component = project.VBComponents(i)
             if component.Name.lower() == module_name.lower():
                 # Clear existing code
-                component.CodeModule.DeleteLines(1, component.CodeModule.CountOfLines)
+                if component.CodeModule.CountOfLines > 0:
+                    component.CodeModule.DeleteLines(1, component.CodeModule.CountOfLines)
                 # Add new code
                 component.CodeModule.AddFromString(code)
                 module_exists = True
+                logger.info(f"Updated existing module: {module_name}")
                 break
         
         if not module_exists:
@@ -781,56 +1057,63 @@ def write_vba_module(db_name: str, module_name: str, code: str) -> str:
             new_module = project.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
             new_module.Name = module_name
             new_module.CodeModule.AddFromString(code)
-        
-        access.Quit()
+            logger.info(f"Created new module: {module_name}")
         
         action = "updated" if module_exists else "created"
         return f"VBA module '{module_name}' {action} successfully"
+    
+    try:
+        # Check for lock before starting
+        path = get_db_path(db_name)
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path)
+            if not success:
+                return f"Error: {message}"
+        
+        # Execute operation with automatic cleanup
+        result = _with_access_database(db_name, operation)
+        logger.info(f"Successfully wrote VBA module: {module_name}")
+        return result
         
     except Exception as e:
-        return f"Error writing VBA module: {str(e)}"
+        logger.error(f"Error writing VBA module '{module_name}': {e}")
+        return f"Error writing VBA module '{module_name}': {str(e)}"
 
 @mcp.tool
 def delete_vba_module(db_name: str, module_name: str) -> str:
     """Delete a VBA module from the Access database"""
-    try:
-        path = get_db_path(db_name)
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
-        
-        # Access the VBA project
+    
+    def operation(access):
         project = access.VBE.VBProjects(1)
         
         # Find and delete the module
-        module_found = False
         for i in range(1, project.VBComponents.Count + 1):
             component = project.VBComponents(i)
             if component.Name.lower() == module_name.lower():
                 project.VBComponents.Remove(component)
-                module_found = True
-                break
+                return f"VBA module '{module_name}' deleted successfully"
         
-        access.Quit()
+        return f"Module '{module_name}' not found"
+    
+    try:
+        path = get_db_path(db_name)
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path, timeout=10)
+            if not success:
+                return f"Error: {message}"
         
-        if module_found:
-            return f"VBA module '{module_name}' deleted successfully"
-        else:
-            return f"Module '{module_name}' not found"
-            
+        result = _with_access_database(db_name, operation)
+        return result
+        
     except Exception as e:
-        return f"Error deleting VBA module: {str(e)}"
+        return f"Error deleting VBA module '{module_name}': {str(e)}"
 
 @mcp.tool
 def run_vba_function(db_name: str, function_name: str, args: str = "") -> str:
     """Execute a VBA function in the Access database and return the result. 
     Args should be comma-separated values like: 'arg1,arg2,arg3'"""
-    try:
-        path = get_db_path(db_name)
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
-        
+    
+    def operation(access):
         # Parse arguments if provided
         if args.strip():
             arg_list = [arg.strip() for arg in args.split(',')]
@@ -838,12 +1121,131 @@ def run_vba_function(db_name: str, function_name: str, args: str = "") -> str:
         else:
             result = access.Run(function_name)
         
-        access.Quit()
-        
         return f"Function '{function_name}' executed successfully. Result: {result}"
+    
+    try:
+        path = get_db_path(db_name)
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path, timeout=10)
+            if not success:
+                return f"Error: {message}"
+        
+        result = _with_access_database(db_name, operation)
+        return result
         
     except Exception as e:
-        return f"Error running VBA function: {str(e)}"
+        return f"Error running VBA function '{function_name}': {str(e)}"
+
+@mcp.tool
+def begin_batch_operation(db_name: str) -> str:
+    """Start a batch operation - keeps database open for multiple commands.
+    
+    Use this when you need to perform multiple operations (create tables, forms, VBA modules)
+    in sequence. This is much faster than individual operations.
+    
+    IMPORTANT: You MUST call commit_batch_operation() when done!
+    """
+    global _batch_mode_db, _batch_mode_access
+    
+    if _batch_mode_access:
+        return f"Error: Batch operation already in progress for '{_batch_mode_db}'"
+    
+    try:
+        path = get_db_path(db_name)
+        
+        # Check for lock
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path, timeout=10)
+            if not success:
+                return f"Error: {message}"
+        
+        _batch_mode_access = win32com.client.Dispatch("Access.Application")
+        _batch_mode_access.Visible = False
+        _batch_mode_access.OpenCurrentDatabase(path)
+        _batch_mode_db = db_name
+        
+        return f"✓ Batch operation started for '{db_name}'. Database will stay open until you call commit_batch_operation()."
+    
+    except Exception as e:
+        _batch_mode_access = None
+        _batch_mode_db = None
+        return f"Error starting batch operation: {str(e)}"
+
+@mcp.tool
+def commit_batch_operation() -> str:
+    """End batch operation, save all changes, and close database.
+    
+    Call this after you've completed all operations in a batch.
+    """
+    global _batch_mode_db, _batch_mode_access
+    
+    if not _batch_mode_access:
+        return "Error: No batch operation in progress"
+    
+    db_name = _batch_mode_db
+    
+    try:
+        # Save all changes
+        _batch_mode_access.DoCmd.Save()
+        
+        # Close database
+        _batch_mode_access.CloseCurrentDatabase()
+        _batch_mode_access.Quit(1)
+        
+        # Clear state
+        _batch_mode_db = None
+        _batch_mode_access = None
+        
+        # Force cleanup
+        _ensure_access_closed()
+        
+        return f"✓ Batch operation committed successfully for '{db_name}'. Database closed and saved."
+    
+    except Exception as e:
+        # Try to cleanup even on error
+        try:
+            if _batch_mode_access:
+                _batch_mode_access.Quit(1)
+        except:
+            pass
+        
+        _batch_mode_db = None
+        _batch_mode_access = None
+        _ensure_access_closed()
+        
+        return f"Error committing batch operation: {str(e)}"
+
+@mcp.tool
+def rollback_batch_operation() -> str:
+    """Cancel batch operation without saving changes and close database.
+    
+    Use this if something went wrong and you want to discard all changes.
+    """
+    global _batch_mode_db, _batch_mode_access
+    
+    if not _batch_mode_access:
+        return "Error: No batch operation in progress"
+    
+    db_name = _batch_mode_db
+    
+    try:
+        # Close without saving
+        _batch_mode_access.CloseCurrentDatabase()
+        _batch_mode_access.Quit(0)  # acQuitSaveNone
+        
+        _batch_mode_db = None
+        _batch_mode_access = None
+        
+        _ensure_access_closed()
+        
+        return f"✓ Batch operation rolled back for '{db_name}'. Changes discarded."
+    
+    except Exception as e:
+        _batch_mode_db = None
+        _batch_mode_access = None
+        _ensure_access_closed()
+        
+        return f"Error rolling back batch operation: {str(e)}"
 
 def _generate_report_template_internal(db_name: str, record_source: str, report_type: str = "tabular") -> str:
     """Internal helper function to generate report template without MCP tool wrapper."""
@@ -1044,42 +1446,57 @@ End"""
         raise Exception(f"Error generating report template: {e}")
 
 def _create_report_from_template_internal(db_name: str, report_name: str, report_text: str) -> str:
-    """Internal helper function to create report from template without MCP tool wrapper."""
+    """Internal helper function to create report from template using new pattern."""
     # Replace placeholder if it exists
     if "__REPORT_NAME_PLACEHOLDER__" in report_text:
         report_text = report_text.replace("__REPORT_NAME_PLACEHOLDER__", report_name)
     
-    path = get_db_path(db_name)
-    temp_file_path = None
+    def operation(access):
+        """Inner function to create the report"""
+        logger.info(f"Creating report: {report_name}")
+        
+        # Write to temp file
+        temp_file_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8') as tf:
+                tf.write(report_text)
+                temp_file_path = tf.name
+
+            AC_REPORT = 3
+            
+            # Delete existing report if it exists
+            try:
+                access.DoCmd.DeleteObject(AC_REPORT, report_name)
+                logger.debug(f"Deleted existing report: {report_name}")
+            except Exception:
+                logger.debug(f"Report {report_name} doesn't exist (creating new)")
+
+            # Load report from text file
+            access.LoadFromText(AC_REPORT, report_name, temp_file_path)
+            logger.info(f"Report '{report_name}' created successfully")
+
+            return f"Report '{report_name}' created successfully in database '{db_name}'."
+            
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                logger.debug("Temp file cleaned up")
     
     try:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt", encoding='utf-8') as tf:
-            tf.write(report_text)
-            temp_file_path = tf.name
-
-        access = win32com.client.Dispatch("Access.Application")
-        access.Visible = False
-        access.OpenCurrentDatabase(path)
+        path = get_db_path(db_name)
         
-        AC_REPORT = 3
+        # Check for lock
+        if is_database_locked(path):
+            success, message = wait_for_lock_release(path)
+            if not success:
+                raise Exception(message)
         
-        try:
-            access.DoCmd.DeleteObject(AC_REPORT, report_name)
-        except Exception:
-            pass
-
-        access.LoadFromText(AC_REPORT, report_name, temp_file_path)
-
-        access.CloseCurrentDatabase()
-        access.Quit()
-
-        return f"Report '{report_name}' created successfully in database '{db_name}'."
-
+        result = _with_access_database(db_name, operation)
+        return result
+        
     except Exception as e:
+        logger.error(f"Error creating report '{report_name}': {e}")
         raise Exception(f"Error creating report from template: {e}")
-    finally:
-        if temp_file_path and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
 
 @mcp.tool
 def create_report_from_source(db_name: str, report_name: str, record_source: str, report_type: str = "tabular") -> str:
@@ -1146,4 +1563,3 @@ def create_report_from_template(db_name: str, report_name: str, report_text: str
             
 if __name__ == "__main__":
     mcp.run()
-
