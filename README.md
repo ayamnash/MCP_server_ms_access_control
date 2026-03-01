@@ -161,7 +161,9 @@ python server.py
 # **Prompt Samples**
 
 (1)Using msaccess MCP server to connect 
-C:\Users\it\AppData\Local\Programs\Kiro\treeview.accdb Make sure to save the changes and close the database using MCP tools.
+C:\Users\it\AppData\Local\Programs\Kiro\treeview.accdb Make sure to save the changes and close the database  tool when  connecting
+to it and  ensure use this tool when  encounter an error.
+.
 i creat form to display accounts as tree 
 look at image attached 7.1.png
 i need create report look like as 7.png image attached 
@@ -576,6 +578,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
