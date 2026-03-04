@@ -1,3 +1,4 @@
+#Tested  fastmcp==1.0(Recommended)
 # MCP Server ms_Access 🚀
 
 A powerful Model Context Protocol (MCP) server that provides seamless integration with Microsoft Access databases. This server enables you to create, manage, and query Access databases through MCP-compatible applications like Kiro IDE.
@@ -578,6 +579,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 Made with ❤️ for the MCP community
+
 
 
 
