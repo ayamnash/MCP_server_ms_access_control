@@ -1,14 +1,15 @@
 [project]
 name = "mcp-server-msaccess"
-version = "0.1.0"
+version = "0.5.0"
 description = "MCP server for Microsoft Access databases"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pip install fastmcp==1.0",
+    "pip install fastmcp==2.11.3",
     "pyodbc>=4.0.0",
     "pywin32>=306",
 ]
+
 
 
 
