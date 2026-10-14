@@ -1,3 +1,4 @@
+# The paid version has been released [link](pro.md)
 # Tested  fastmcp==2.11.3(Recommended) it working 100%
 Some versions may not work perfectly.
 
