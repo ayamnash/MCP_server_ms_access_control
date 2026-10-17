@@ -1,6 +1,6 @@
-# email:ayannash@gmail.com
+ email:ayannash@gmail.com
 # MS Access Enterprise MCP Server & Knowledge Graph Engine
-#convert your msaccess database to any programing language 
+# convert your msaccess database to any programing language 
 Please export the entire database at "k:/accointing_and_warejouse.accdb" into a Git-friendly source tree folder at "k:/accounting_src_tree" using the export_source_tree tool. Provide a summary of the extracted forms, reports, queries, modules, and schema.
  -----Git Source Control & CI/CD Deconstruction (`export_source_tree`, `import_source_tree`):**
    - Disassembles any `.accdb` binary database into a human-readable UTF-8 source tree (`forms/`, `reports/`, `queries/`, `modules/`, `macros/`, and `schema.json`).
