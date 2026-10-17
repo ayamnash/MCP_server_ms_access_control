@@ -1,7 +1,12 @@
+# email:ayannash@gmail.com
 # MS Access Enterprise MCP Server & Knowledge Graph Engine
+#convert your msaccess database to any programing language 
+Please export the entire database at "k:/accointing_and_warejouse.accdb" into a Git-friendly source tree folder at "k:/accounting_src_tree" using the export_source_tree tool. Provide a summary of the extracted forms, reports, queries, modules, and schema.
+ -----Git Source Control & CI/CD Deconstruction (`export_source_tree`, `import_source_tree`):**
+   - Disassembles any `.accdb` binary database into a human-readable UTF-8 source tree (`forms/`, `reports/`, `queries/`, `modules/`, `macros/`, and `schema.json`).
+   - Enables full Git version control, branching, Pull Request reviews, and line-by-line diff tracking.
+   - Reconstructs and compiles a pristine, fully runnable `.accdb` file from any exported source tree directory with zero data corruption.
 
-> **The Definitive Model Context Protocol (MCP) Server for Microsoft Access (`.accdb` and `.mdb`).**  
-> Connect Claude Desktop, Cursor, Kiro, VS Code, or custom AI agents directly to your Microsoft Access databases with native speed, token reduction, surgical UI editing, deep impact analysis, and referential integrity.
 
 ---
 
